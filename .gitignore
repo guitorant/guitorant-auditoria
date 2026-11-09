@@ -1,0 +1,9 @@
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+node_modules/
+
+# Material de referencia y pruebas (no se publica)
+/referencia-boomerang/
+/Producto/
+/verificacion/
