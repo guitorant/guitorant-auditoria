@@ -20,12 +20,14 @@ Luego abre en el navegador: <http://localhost:8080>
 
 **Otra opción:** en VS Code / Antigravity, la extensión *Live Server* (clic derecho en `index.html` → "Open with Live Server").
 
-Por defecto está en **modo demo**: usa negocios inventados y no gasta nada de Google. Para probar, escribe "caf" en la búsqueda y elige cualquiera de los tres cafés de ejemplo:
+Para probar **sin gastar nada de Google**, pon `MODO_DEMO = true` en `js/config.js` y escribe "caf" en la búsqueda. Los negocios de ejemplo son inventados y cada uno prueba una versión de la pantalla de reseñas:
 
-- **Café Ejemplo**: tiene 2 reseñas malas (camino normal).
-- **Café Ejemplo Premium**: no tiene reseñas malas.
+- **Café Ejemplo**: tiene 2 reseñas malas (muestra solo esas, con la etiqueta "Reseña negativa").
+- **Café Quieto Ejemplo**: su última reseña tiene 5 meses ("Hace 5 meses nadie deja una reseña…").
+- **Café Ejemplo Premium**: tiene pocas reseñas frente al #1 ("Solo 210 personas han hablado de tu negocio…").
+- **Café Estrella Ejemplo**: perfil sano pero el #1 recibe más reseñas al mes ("Te están alcanzando").
 - **Café Nuevo Ejemplo**: no tiene ninguna reseña.
-- El enlace "Mi negocio no está en Google" prueba el camino sin perfil.
+- El enlace "Mi negocio no está en Google" abre la ruta corta de 4 pantallas (crear, reclamar u optimizar el perfil).
 
 ---
 
@@ -37,7 +39,10 @@ Todo está en **`js/datos.js`**. Ábrelo con cualquier editor y cambia lo que es
 - Precios: busca `PRODUCTOS`. Cambia `precio` (en pesos, sin puntos).
 - Lo que incluyen todas las tarjetas: busca `INCLUIDO`. Si a un ítem le pones un número en `valor`, se muestra tachado como "valor $X".
 - Dato de la pantalla 2 (con fuente): busca `DATO_CONTEXTO` y llena `texto` y `fuente`. Si lo dejas vacío, no se muestra nada.
-- Enlace de la política de datos: `POLITICA_URL`.
+- Precios de la ruta "Mi negocio no está en Google": `PRECIO_CREAR`, `PRECIO_RECLAMAR`, `PRECIO_OPTIMIZAR`. Mientras digan `[PENDIENTE]`, la página muestra "Te damos el precio por WhatsApp en minutos". Para poner un precio, escribe solo el número (ej: `150000`).
+- Política de datos: el enlace es `POLITICA_URL` (ya apunta a `politica.html`) y el correo de contacto que sale en esa página es `CORREO_CONTACTO`.
+- Nombres amigables de los tipos de negocio ("restaurantes", "peluquerías"…): `CATEGORIAS`.
+- Duración de las reacciones del personaje: `REACCION_MIN_MS`, `REACCION_MAX_MS`, `REACCION_MS_POR_PALABRA`.
 - Imágenes: `IMAGENES`. Cuando tengas el personaje guía, ponle `"assets/personaje/guia.png"`.
 
 Los **colores** están al inicio de `css/estilos.css` (sección `:root`).
@@ -61,7 +66,11 @@ Los **supuestos de los cálculos** (clientes por día, tasa de reseña con tarje
 
 La clave de Google Maps en una página web es visible para cualquiera; por eso la restricción por sitio es lo que la protege. Además, la página limita a 3 auditorías por día por navegador (`MAX_AUDITORIAS_POR_DIA`), solo cuando el modo demo está apagado.
 
-Cada auditoría hace: 1 autocompletado + 1 detalle + 1 foto + 1 búsqueda de cercanos.
+Cada auditoría hace: 1 autocompletado + 1 detalle + 1 foto + 1 búsqueda de cercanos (2 si a 2 km salen menos de 3 negocios del mismo tipo: la segunda es a 5 km).
+
+La competencia es siempre **del mismo tipo de negocio** (filtro por tipo principal; además se descartan resultados de otra familia que Google a veces mezcla). Si el negocio no tiene un tipo específico, la página se salta el ranking.
+
+**Ojo con la cuota:** si en Google Cloud tienes un tope diario de llamadas (por ejemplo `GetPlace` por día), las pruebas lo gastan. Una auditoría usa 1 llamada `GetPlace`.
 
 ---
 
@@ -79,6 +88,8 @@ Cada auditoría hace: 1 autocompletado + 1 detalle + 1 foto + 1 búsqueda de cer
 8. Pégala en `js/config.js`, en `APPS_SCRIPT_URL`.
 
 Prueba: abre la URL en el navegador; debe decir que el script está funcionando. Después haz una auditoría de prueba hasta el formulario de contacto: aparecerá una pestaña `Leads` con la fila. El mismo lead se actualiza (no se duplica) cuando elige tarjeta y cuando toca WhatsApp.
+
+La página también envía dos datos nuevos, `ruta` (`con_perfil` o `sin_perfil`) y `servicio` (`crear`, `reclamar` u `optimizar`). Para que se guarden, agrega esas dos columnas en `COLUMNAS` de `apps-script/Code.gs` y vuelve a implementar. Mientras tanto, en la ruta "sin perfil" el servicio queda escrito en la columna `opcion_elegida` (ej: "Crear perfil + Tarjeta Toque Pro").
 
 Si cambias `Code.gs` más adelante, debes hacer **Implementar → Administrar implementaciones → editar → Nueva versión**.
 
@@ -116,8 +127,9 @@ Si cambias `Code.gs` más adelante, debes hacer **Implementar → Administrar im
 | `js/google.js` | Habla con Google (autocompletado, detalle del negocio, competencia). |
 | `js/demo.js` | Negocios y competidores inventados para probar. |
 | `js/app.js` | Navegación, barra de progreso, pantallas, envío de leads, píxel. |
+| `politica.html` | Política de tratamiento de datos (Ley 1581 de 2012). Se abre desde la casilla de autorización. |
 | `apps-script/Code.gs` | Script que guarda los leads en Google Sheets. |
-| `assets/producto/` | Fotos de las tarjetas. |
+| `assets/producto/` | Fotos de las tarjetas (hoy: `tarjeta-pro.jpg`). |
 | `assets/personaje/` | Aquí va la imagen del personaje guía (`guia.png`). |
 | `CNAME` | Le dice a GitHub Pages el dominio `auditoria.guitorant.com`. |
 | `.gitignore` | Lista de carpetas que Git no sube. |

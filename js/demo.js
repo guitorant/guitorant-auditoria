@@ -44,6 +44,43 @@ const DEMO_NEGOCIOS = [
     ]
   },
   {
+    // Para probar el caso "hace meses nadie deja una reseña"
+    id: "demo-cafe-quieto",
+    displayName: "Café Quieto Ejemplo",
+    formattedAddress: "Calle 50 #30-15, Medellín, Antioquia, Colombia",
+    primaryType: "cafe",
+    primaryTypeDisplayName: "Cafetería",
+    rating: 4.5,
+    userRatingCount: 380,
+    priceRange: "",
+    photoUrl: "",
+    googleMapsURI: "https://maps.google.com/?q=Cafe+Quieto+Ejemplo",
+    posicionLista: 4,
+    diasUltimaResena: 150,
+    reviews: [
+      { rating: 5, autor: "Ricardo B.", fecha: "hace 5 meses", texto: "Un clásico del centro, siempre buen café." },
+      { rating: 4, autor: "Elena V.", fecha: "hace 6 meses", texto: "Bonito lugar y buena atención." }
+    ]
+  },
+  {
+    // Para probar el caso "te están alcanzando" (buen perfil, sin reseñas malas ni viejas)
+    id: "demo-cafe-estrella",
+    displayName: "Café Estrella Ejemplo",
+    formattedAddress: "Carrera 70 #44-10, Medellín, Antioquia, Colombia",
+    primaryType: "cafe",
+    primaryTypeDisplayName: "Cafetería",
+    rating: 4.7,
+    userRatingCount: 600,
+    priceRange: "",
+    photoUrl: "",
+    googleMapsURI: "https://maps.google.com/?q=Cafe+Estrella+Ejemplo",
+    posicionLista: 2,
+    reviews: [
+      { rating: 5, autor: "Valentina J.", fecha: "hace 3 días", texto: "Excelente café y muy buena música." },
+      { rating: 5, autor: "Camilo H.", fecha: "hace 1 semana", texto: "El mejor brownie que he probado." }
+    ]
+  },
+  {
     // Para probar el camino "negocio sin reseñas ni calificación"
     id: "demo-cafe-nuevo",
     displayName: "Café Nuevo Ejemplo",

@@ -59,6 +59,24 @@ const GoogleAPI = (function () {
     } catch (e) { /* sin precio */ }
     return "";
   }
+  /** Tipo con el que se compara: el principal; si no hay, el primero específico de la lista. */
+  function tipoParaComparar(primario, tipos) {
+    if (primario && TIPOS_GENERICOS.indexOf(primario) < 0) return primario;
+    const lista = tipos || [];
+    for (let i = 0; i < lista.length; i++) {
+      if (TIPOS_GENERICOS.indexOf(lista[i]) < 0) return lista[i];
+    }
+    return "";
+  }
+  /** Familia de un tipo: todos los *_restaurant son "restaurant"; los de FAMILIAS_TIPOS comparten grupo. */
+  function familiaDeTipo(tipo) {
+    if (!tipo) return "";
+    if (/(^|_)restaurant$/.test(tipo) || tipo === "steak_house") return "restaurant";
+    for (let i = 0; i < FAMILIAS_TIPOS.length; i++) {
+      if (FAMILIAS_TIPOS[i].indexOf(tipo) >= 0) return "familia-" + i;
+    }
+    return tipo;
+  }
   function textoDe(x) {
     if (!x) return "";
     if (typeof x === "string") return x;
@@ -84,11 +102,13 @@ const GoogleAPI = (function () {
         return {
           id: n.id, displayName: n.displayName, formattedAddress: n.formattedAddress,
           primaryType: n.primaryType, primaryTypeDisplayName: n.primaryTypeDisplayName,
+          tipoComparacion: n.primaryType,
           rating: n.rating, userRatingCount: n.userRatingCount,
           priceRange: n.priceRange, photoUrl: n.photoUrl, googleMapsURI: n.googleMapsURI,
           reviews: n.reviews.map(function (r, i) {
+            const dias = (typeof n.diasUltimaResena === "number" ? n.diasUltimaResena : 14) + i * 9;
             return { rating: r.rating, autor: r.autor, fecha: r.fecha, texto: r.texto,
-              publishTime: new Date(Date.now() - (14 + i * 9) * 86400000) };
+              publishTime: new Date(Date.now() - dias * 86400000) };
           }),
           _posicionDemo: n.posicionLista
         };
@@ -139,7 +159,7 @@ const GoogleAPI = (function () {
       return cargarPlaces().then(function () {
         const place = sug.ref.toPlace();
         return place.fetchFields({
-          fields: ["id", "displayName", "formattedAddress", "location", "primaryType",
+          fields: ["id", "displayName", "formattedAddress", "location", "primaryType", "types",
             "primaryTypeDisplayName", "rating", "userRatingCount", "reviews",
             "priceRange", "priceLevel", "photos", "googleMapsURI"]
         }).then(function () {
@@ -163,6 +183,7 @@ const GoogleAPI = (function () {
             formattedAddress: place.formattedAddress || "",
             location: place.location,
             primaryType: place.primaryType || "",
+            tipoComparacion: tipoParaComparar(place.primaryType, place.types),
             primaryTypeDisplayName: textoDe(place.primaryTypeDisplayName),
             rating: typeof place.rating === "number" ? place.rating : null,
             userRatingCount: place.userRatingCount || 0,
@@ -175,19 +196,33 @@ const GoogleAPI = (function () {
       });
     },
     cercanos: function (negocio) {
+      // Siempre del mismo tipo de negocio. Sin tipo específico no se compara (la app salta el ranking).
+      const tipo = negocio.tipoComparacion;
+      if (!tipo) return Promise.resolve([]);
       return cargarPlaces().then(function (lib) {
-        const peticion = {
-          fields: ["id", "displayName", "rating", "userRatingCount"],
-          locationRestriction: { center: negocio.location, radius: RADIO_BUSQUEDA_M },
-          maxResultCount: 20,
-          rankPreference: lib.SearchNearbyRankPreference.POPULARITY,
-          language: "es",
-          region: "co"
-        };
-        if (negocio.primaryType) peticion.includedPrimaryTypes = [negocio.primaryType];
-        return lib.Place.searchNearby(peticion);
-      }).then(function (resp) {
-        return (resp.places || []).map(function (p) {
+        // Solo se aceptan lugares de la misma familia (el propio negocio nunca se descarta).
+        function buscar(radio) {
+          return lib.Place.searchNearby({
+            fields: ["id", "displayName", "rating", "userRatingCount", "primaryType"],
+            locationRestriction: { center: negocio.location, radius: radio },
+            includedPrimaryTypes: [tipo],
+            maxResultCount: 20,
+            rankPreference: lib.SearchNearbyRankPreference.POPULARITY,
+            language: "es",
+            region: "co"
+          }).then(function (resp) {
+            return (resp.places || []).filter(function (p) {
+              return p.id === negocio.id || !p.primaryType || familiaDeTipo(p.primaryType) === familiaDeTipo(tipo);
+            });
+          });
+        }
+        // Una búsqueda a 2 km; si salen pocos del mismo tipo, UNA más a 5 km con el mismo filtro.
+        return buscar(RADIO_BUSQUEDA_M).then(function (lista) {
+          if (lista.length >= MIN_RESULTADOS_MISMO_TIPO) return lista;
+          return buscar(RADIO_BUSQUEDA_AMPLIADO_M);
+        });
+      }).then(function (lugares) {
+        return lugares.map(function (p) {
           return {
             id: p.id,
             nombre: textoDe(p.displayName),

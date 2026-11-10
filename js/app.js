@@ -8,6 +8,8 @@
   /* ---------- Referencias a la página ---------- */
   const $app = document.getElementById("app");
   const $progreso = document.getElementById("progreso");
+  const $porcentaje = document.getElementById("porcentaje");
+  const $hito = document.getElementById("hito");
   const $atras = document.getElementById("atras");
   const $barraCta = document.getElementById("barra-cta");
   const $cta = document.getElementById("cta");
@@ -15,6 +17,9 @@
   /* ---------- Estado ---------- */
   const estado = {
     historial: ["bienvenida"],
+    ruta: null,            // null = con perfil · "sin_perfil" = no está en Google
+    servicio: null,        // crear | reclamar | optimizar
+    servicioOpcionId: null,
     leadId: nuevoId(),
     fechaLead: null,
     clientesId: null,
@@ -27,18 +32,23 @@
     rank: null,
     proy: null,
     contacto: { nombre: "", whatsapp: "", correo: "" },
+    sinPerfil: { negocio: "", ciudad: "" },
     autorizacionFecha: "",
-    opcionId: null,
+    opcionId: null,        // tarjeta elegida (ruta con perfil)
+    opcionSpId: "pro",     // tarjeta elegida (ruta sin perfil): movil | pro | duo | solo
     tocoWhatsapp: false,
     utm: leerUtm()
   };
   let temporizadores = [];
   let ctaAccion = null;
   let ultimoProgreso = 0;
+  let temporizadorHito = null;
+  const hitos = { mitad: false, ultimo: false };
 
-  // Orden de las pantallas del camino principal (para la barra de progreso)
+  // Orden de las pantallas de cada camino (para la barra de progreso)
   const PASOS = ["bienvenida", "contexto", "q1", "q2", "q3", "busqueda", "eresTu", "perfil", "resenas",
     "analisis", "ranking", "porque", "ritmo", "tarjeta", "como", "contacto", "precios", "listo"];
+  const PASOS_SIN_PERFIL = ["bienvenida", "contexto", "q1", "q2", "q3", "busqueda", "sp1", "sp2", "sp3", "sp4", "listo"];
 
   /* ---------- Utilidades ---------- */
   function nuevoId() {
@@ -79,15 +89,23 @@
   function decimal(n) {
     return (Math.round(n * 10) / 10).toFixed(1).replace(".", ",");
   }
-  function lineaResenas(total) {
-    return total > 0 ? miles(total) + (total === 1 ? " reseña" : " reseñas") : "Sin reseñas";
-  }
   function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function pasar(fn, ms) { const t = setTimeout(fn, ms); temporizadores.push(t); return t; }
   function limpiarTemporizadores() { temporizadores.forEach(clearTimeout); temporizadores = []; }
+  function sinMovimiento() {
+    try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; }
+  }
+  function vibrar() {
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { /* sin vibración */ }
+  }
+  /** Nombre amigable del tipo de negocio con el que se compara. */
   function categoria() {
     const n = estado.negocio;
-    return (n && n.primaryTypeDisplayName) ? n.primaryTypeDisplayName.toLowerCase() : "negocios";
+    if (!n) return "negocios";
+    const tipo = n.tipoComparacion;
+    if (tipo && CATEGORIAS[tipo]) return CATEGORIAS[tipo];
+    if (n.primaryTypeDisplayName && (!tipo || tipo === n.primaryType)) return n.primaryTypeDisplayName.toLowerCase();
+    return "negocios";
   }
   function nombreNegocio() { return (estado.negocio && estado.negocio.displayName) || "tu negocio"; }
   function ciudad() { return Calculos.ciudadDeDireccion(estado.negocio && estado.negocio.formattedAddress) || "Colombia"; }
@@ -98,8 +116,68 @@
   }
   function clientesDia() { return Calculos.clientesDia(estado.clientesId); }
   function ticketActual() { return Calculos.ticket(estado.ticketId, estado.ticketExacto); }
+  /** Tarjeta elegida según la ruta (null = "solo el servicio" o nada). */
   function productoElegido() {
-    return PRODUCTOS.filter(function (p) { return p.id === estado.opcionId; })[0] || null;
+    const id = estado.ruta === "sin_perfil" ? estado.opcionSpId : estado.opcionId;
+    return PRODUCTOS.filter(function (p) { return p.id === id; })[0] || null;
+  }
+  /** Precio de un servicio como número, o null si está pendiente. */
+  function precioNumerico(valor) {
+    if (typeof valor === "number" && valor > 0) return valor;
+    if (typeof valor === "string" && /^\d+$/.test(valor.trim())) return Number(valor);
+    return null;
+  }
+
+  /* ---------- Números que suben contando ---------- */
+  function formatoCuenta(n, v) {
+    const dec = Number(n.dataset.dec);
+    return n.dataset.pref + (dec ? decimal(v) : miles(v)) + n.dataset.suf;
+  }
+  function numero(valor, op) {
+    op = op || {};
+    const n = el("span", { class: "cuenta" });
+    n.dataset.valor = String(valor);
+    n.dataset.dec = String(op.dec || 0);
+    n.dataset.pref = op.pref || "";
+    n.dataset.suf = op.suf || "";
+    n.dataset.desde = String(op.desde || 0);
+    n.textContent = formatoCuenta(n, Number(valor));
+    return n;
+  }
+  /** Texto con {variables}; si la variable es {cuenta: n} se dibuja como número animado. */
+  function fragmento(txt, vars) {
+    const f = document.createDocumentFragment();
+    String(txt).split(/(\{\w+\})/).forEach(function (parte) {
+      const m = /^\{(\w+)\}$/.exec(parte);
+      if (!m) { if (parte) f.appendChild(document.createTextNode(parte)); return; }
+      const v = vars[m[1]];
+      if (v && typeof v === "object" && "cuenta" in v) f.appendChild(numero(v.cuenta, v));
+      else if (v !== undefined && v !== null) f.appendChild(document.createTextNode(String(v)));
+    });
+    return f;
+  }
+  /** Al mostrar una pantalla: estrellas que se llenan y números que suben (800 ms). */
+  function iniciarAnimaciones(cont) {
+    const quieto = sinMovimiento();
+    const cuentas = Array.prototype.slice.call(cont.querySelectorAll(".cuenta"));
+    if (!quieto) cuentas.forEach(function (n) { n.textContent = formatoCuenta(n, Number(n.dataset.desde)); });
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        Array.prototype.forEach.call(cont.querySelectorAll(".est"), function (e) { e.classList.add("est--on"); });
+        if (quieto || !cuentas.length) return;
+        const inicio = performance.now();
+        function paso(ahora) {
+          const p = Math.min(1, (ahora - inicio) / 800);
+          const suave = 1 - Math.pow(1 - p, 3);
+          cuentas.forEach(function (n) {
+            const d = Number(n.dataset.desde), v = Number(n.dataset.valor);
+            n.textContent = formatoCuenta(n, p < 1 ? d + (v - d) * suave : v);
+          });
+          if (p < 1 && cont.isConnected) requestAnimationFrame(paso);
+        }
+        requestAnimationFrame(paso);
+      });
+    });
   }
 
   /* ---------- Íconos (SVG, sin emojis) ---------- */
@@ -113,28 +191,37 @@
     return s;
   }
   const ICONO = {
-    check: function () { return svg('<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>'); },
+    check: function (c) { return svg('<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>', c); },
+    flecha: function (c) { return svg('<path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>', c); },
     lupa: function (c) { return svg('<circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>', c); },
-    ondas: function (c) { return svg('<path d="M8 6.5a8 8 0 010 11M12 3.5a12.5 12.5 0 010 17M16 0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="12" r="1.8" fill="currentColor"/>', c); }
+    ondas: function (c) { return svg('<path d="M8 6.5a8 8 0 010 11M12 3.5a12.5 12.5 0 010 17M16 0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="12" r="1.8" fill="currentColor"/>', c); },
+    checkGrande: function () {
+      return svg('<circle cx="48" cy="48" r="44" pathLength="1"/><path d="M29 49l13 13 26-27" pathLength="1"/>', "check-grande", "0 0 96 96");
+    }
   };
   const ESTRELLA_PATH = "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z";
-  function filaEstrellas(color) {
-    const f = el("span", { class: "est__fila" });
-    for (let i = 0; i < 5; i++) f.appendChild(svg('<path d="' + ESTRELLA_PATH + '" fill="' + color + '"/>'));
-    return f;
-  }
+  function iconoEstrella(color) { return svg('<path d="' + ESTRELLA_PATH + '" fill="' + color + '"/>'); }
+  /** Cinco estrellas; cada una se llena sola, una tras otra. */
   function estrellas(rating, grande) {
     const r = Math.max(0, Math.min(5, Number(rating) || 0));
-    const base = filaEstrellas("#D4D4D4");
-    const sobre = el("span", { class: "est__sobre" }, filaEstrellas("#FBBC04"));
-    sobre.style.width = (r / 5 * 100) + "%";
-    return el("span", { class: "est" + (grande ? " est--grande" : ""), role: "img", "aria-label": decimal(r) + " de 5 estrellas" }, base, sobre);
+    const caja = el("span", { class: "est" + (grande ? " est--grande" : ""), role: "img", "aria-label": decimal(r) + " de 5 estrellas" });
+    for (let i = 0; i < 5; i++) {
+      const lleno = Math.max(0, Math.min(1, r - i));
+      const sobre = el("span", { class: "est__sobre" }, iconoEstrella("#FBBC04"));
+      const e = el("span", { class: "est__e" }, iconoEstrella("#D4D4D4"), sobre);
+      e.style.setProperty("--i", String(i));
+      e.style.setProperty("--w", (lleno * 100) + "%");
+      sobre.style.setProperty("--i", String(i));
+      sobre.style.setProperty("--w", (lleno * 100) + "%");
+      caja.appendChild(e);
+    }
+    return caja;
   }
   function lineaCalificacion(rating, total, extra) {
     const t = TEXTOS.perfil;
     const hijos = [];
     if (rating !== null && rating !== undefined) {
-      hijos.push(el("strong", { texto: decimal(rating) }), estrellas(rating), el("span", { texto: "(" + miles(total) + ")" }));
+      hijos.push(el("strong", null, numero(rating, { dec: 1 })), estrellas(rating), numero(total, { pref: "(", suf: ")" }));
     } else {
       hijos.push(el("span", { texto: t.sinCalificacion }));
     }
@@ -156,25 +243,53 @@
     return caja;
   }
 
-  /* ---------- Tarjeta NFC dibujada con CSS ---------- */
-  function crearTarjetaNfc(nombre, chica) {
-    return el("div", { class: "nfc" + (chica ? " nfc--chica" : ""), role: "img", "aria-label": "Tarjeta de " + nombre },
-      el("div", { class: "nfc__nombre", texto: nombre }),
-      el("div", { class: "nfc__pie" }, ICONO.ondas("nfc__ondas"), el("span", { texto: TEXTOS.tarjeta.califica }))
+  /* ---------- Tarjeta genérica dibujada (sin nombre del negocio) ---------- */
+  function crearTarjetaNfc() {
+    return el("div", { class: "nfc", role: "img", "aria-label": TEXTOS.tarjeta.califica },
+      el("div", { class: "nfc__titulo", texto: TEXTOS.tarjeta.califica }),
+      el("div", { class: "nfc__pie" }, ICONO.ondas("nfc__ondas"), el("span", { texto: TEXTOS.tarjeta.acerca }))
     );
   }
 
   /* ---------- Botón principal fijo ---------- */
   function setCta(opciones) {
-    if (!opciones) { $barraCta.hidden = true; ctaAccion = null; return; }
+    if (!opciones) {
+      $barraCta.hidden = true; ctaAccion = null;
+      document.body.classList.remove("con-cta");
+      return;
+    }
     $barraCta.hidden = false;
-    $cta.textContent = opciones.texto;
+    document.body.classList.add("con-cta");
+    $cta.replaceChildren(el("span", { texto: opciones.texto }), ICONO.flecha("boton__flecha"));
     $cta.disabled = opciones.habilitado === false;
     ctaAccion = opciones.alHacerClic;
   }
   $cta.addEventListener("click", function () {
     if (!$cta.disabled && ctaAccion) ctaAccion();
   });
+
+  /* ---------- Progreso ---------- */
+  function mostrarHito(texto) {
+    clearTimeout(temporizadorHito);
+    $hito.textContent = texto;
+    $hito.classList.add("visible");
+    temporizadorHito = setTimeout(function () { $hito.classList.remove("visible"); }, 1500);
+  }
+  function actualizarProgreso(id) {
+    const lista = estado.ruta === "sin_perfil" ? PASOS_SIN_PERFIL : PASOS;
+    const i = lista.indexOf(id);
+    const antes = ultimoProgreso;
+    if (i >= 0) ultimoProgreso = Math.round(((i + 1) / lista.length) * 100);
+    $progreso.style.width = ultimoProgreso + "%";
+    $porcentaje.textContent = ultimoProgreso + "%";
+    $progreso.parentNode.setAttribute("aria-valuenow", String(ultimoProgreso));
+    // Mensajes cortos al 50% y al 90%, solo al avanzar y una vez
+    if (ultimoProgreso > antes) {
+      if (ultimoProgreso >= 90 && !hitos.ultimo) { hitos.ultimo = true; hitos.mitad = true; mostrarHito(TEXTOS.progreso.ultimo); }
+      else if (ultimoProgreso >= 50 && !hitos.mitad) { hitos.mitad = true; mostrarHito(TEXTOS.progreso.mitad); }
+    }
+    return i;
+  }
 
   /* ---------- Navegación ---------- */
   function ir(id) {
@@ -198,57 +313,97 @@
     limpiarTemporizadores();
     const def = PANTALLAS[id];
     estado.actualPantalla = id;
+    if (id === "busqueda") estado.ruta = null; // al volver al buscador se deja la ruta "sin perfil"
     const cont = el("section", { class: "pantalla", "data-pantalla": id });
     $app.replaceChildren(cont);
     window.scrollTo(0, 0);
     setCta(null);
     // Flecha atrás: desde la pantalla 2, nunca en la última
-    $atras.hidden = (id === "bienvenida" || id === "listo");
-    // Progreso
-    const i = PASOS.indexOf(id);
-    if (i >= 0) ultimoProgreso = Math.round(((i + 1) / PASOS.length) * 100);
-    $progreso.style.width = ultimoProgreso + "%";
-    $progreso.parentNode.setAttribute("aria-valuenow", String(ultimoProgreso));
+    $atras.classList.toggle("oculto", id === "bienvenida" || id === "listo");
+    const i = actualizarProgreso(id);
     try { def.render(cont); } catch (e) {
       console.error("Error al mostrar la pantalla " + id, e);
       if (id !== "demanda") ir("demanda");
+      return;
     }
+    iniciarAnimaciones(cont);
     medirPantalla(id, i);
   }
 
-  /* ---------- Reacciones (P3 a P5) ---------- */
-  function mostrarReaccion(cont, lista, texto, siguiente) {
-    lista.classList.add("bloqueadas");
-    const burbuja = el("div", { class: "reaccion", role: "status" },
-      crearGuia(true), el("div", { class: "reaccion__burbuja", texto: texto }));
-    cont.appendChild(burbuja);
-    try { burbuja.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) { /* ok */ }
-    pasar(siguiente, DURACION_REACCION_MS);
+  /* ---------- Reacciones del personaje (después de las 3 preguntas) ---------- */
+  function duracionReaccion(texto) {
+    const palabras = String(texto).trim().split(/\s+/).length;
+    return Math.min(REACCION_MAX_MS, Math.max(REACCION_MIN_MS, palabras * REACCION_MS_POR_PALABRA));
+  }
+  /** Tres puntos "escribiendo…", luego el mensaje con una línea que se llena. Tocar la burbuja avanza. */
+  function mostrarReaccion(cont, texto, siguiente) {
+    let zona = cont.querySelector(".reaccion-zona");
+    if (!zona) { zona = el("div", { class: "reaccion-zona" }); cont.appendChild(zona); }
+    const burbuja = el("div", { class: "reaccion__burbuja" }, el("span", { class: "escribiendo", "aria-hidden": "true" }, el("i"), el("i"), el("i")));
+    const relleno = el("i");
+    const caja = el("div", { class: "reaccion", role: "button", tabindex: "0", "aria-label": TEXTOS.general.continuar },
+      crearGuia(true),
+      el("div", { class: "reaccion__cuerpo" }, burbuja, el("div", { class: "reaccion__tiempo", "aria-hidden": "true" }, relleno)));
+    zona.setAttribute("aria-live", "polite");
+    zona.replaceChildren(caja);
+    let hecho = false;
+    function avanzar() { if (hecho) return; hecho = true; siguiente(); }
+    caja.addEventListener("click", avanzar);
+    caja.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); avanzar(); }
+    });
+    const duracion = duracionReaccion(texto);
+    pasar(function () {
+      burbuja.classList.add("con-texto");
+      burbuja.replaceChildren(document.createTextNode(texto));
+      relleno.style.transitionDuration = duracion + "ms";
+      requestAnimationFrame(function () { requestAnimationFrame(function () { relleno.classList.add("lleno"); }); });
+      pasar(avanzar, duracion);
+    }, REACCION_ESCRIBIENDO_MS);
   }
 
+  /* ---------- Opciones de respuesta ---------- */
+  function crearOpcion(op) {
+    return el("button", { class: "opcion", type: "button", "aria-pressed": "false" },
+      op.emoji ? el("span", { class: "opcion__emoji", "aria-hidden": "true", texto: op.emoji }) : null,
+      el("span", { class: "opcion__cuerpo" },
+        el("span", { class: "opcion__texto", texto: op.texto }),
+        op.nota ? el("span", { class: "opcion__nota", texto: op.nota }) : null),
+      el("span", { class: "opcion__check", "aria-hidden": "true" }, ICONO.check()));
+  }
+  function marcarElegida(lista, boton) {
+    Array.prototype.forEach.call(lista.querySelectorAll(".opcion"), function (b) { b.setAttribute("aria-pressed", "false"); });
+    boton.setAttribute("aria-pressed", "true");
+    lista.classList.add("hay-elegida");
+    boton.classList.add("pulso");
+    setTimeout(function () { boton.classList.remove("pulso"); }, 300);
+  }
+
+  /** Pregunta con opciones. Con "reaccion" muestra la burbuja del personaje; sin ella, avanza tras un instante. */
   function renderPregunta(cont, cfg) {
-    cont.appendChild(el("h1", { class: "titulo", texto: cfg.titulo }));
+    cont.appendChild(el("h1", { class: "titulo titulo--centro", texto: cfg.titulo }));
     const lista = el("div", { class: "opciones" + (cfg.cuadricula ? " opciones--cuadricula" : "") });
     let yaElegido = false;
     cfg.opciones.forEach(function (op) {
-      const boton = el("button", {
-        class: "opcion", type: "button", texto: op.texto,
-        "aria-pressed": cfg.elegida() === op.id ? "true" : "false"
-      });
+      const boton = crearOpcion(op);
+      if (cfg.elegida && cfg.elegida() === op.id) boton.setAttribute("aria-pressed", "true");
       boton.addEventListener("click", function () {
         if (yaElegido) return;
         yaElegido = true;
-        lista.querySelectorAll(".opcion").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
-        boton.setAttribute("aria-pressed", "true");
-        cfg.alElegir(op);
-        pasar(function () {
-          mostrarReaccion(cont, lista, cfg.reaccion(op), cfg.siguiente);
-        }, 300);
+        vibrar();
+        marcarElegida(lista, boton);
         lista.classList.add("bloqueadas");
+        cfg.alElegir(op);
+        if (cfg.reaccion) {
+          pasar(function () { mostrarReaccion(cont, cfg.reaccion(op), cfg.siguiente); }, 350);
+        } else {
+          pasar(cfg.siguiente, 500);
+        }
       });
       lista.appendChild(boton);
     });
     cont.appendChild(lista);
+    if (cfg.reaccion) cont.appendChild(el("div", { class: "reaccion-zona" }));
     return lista;
   }
 
@@ -277,32 +432,45 @@
 
   /* ---------- Leads (Google Sheets) ---------- */
   function guardarLead(momento) {
-    const n = estado.negocio || {};
+    const sin = estado.ruta === "sin_perfil";
+    const n = sin ? {} : (estado.negocio || {});
     const p = productoElegido();
+    const srv = sin ? SERVICIOS[estado.servicio || "crear"] : null;
     const opcionComo = OPCIONES_RESENAS.filter(function (o) { return o.id === estado.comoPideId; })[0];
     if (!estado.fechaLead) estado.fechaLead = new Date().toISOString();
+
+    let opcion = p ? p.nombre : "";
+    let precio = p ? p.precio : "";
+    if (sin) {
+      opcion = srv.nombre + " + " + (p ? p.nombre : TEXTOS.sinPerfil.mensajeSoloServicio);
+      const suma = (precioNumerico(srv.precio) || 0) + (p ? p.precio : 0);
+      precio = suma > 0 ? suma : "";
+      if (momento === "contacto") { opcion = srv.nombre; precio = ""; }
+    }
     const datos = {
       momento: momento,
       fecha: estado.fechaLead,
       lead_id: estado.leadId,
+      ruta: sin ? "sin_perfil" : "con_perfil",
+      servicio: sin ? estado.servicio : "",
       nombre: estado.contacto.nombre,
       whatsapp: estado.contacto.whatsapp,
       correo: estado.contacto.correo,
       autorizacion_fecha_hora: estado.autorizacionFecha,
-      negocio: n.displayName || "",
+      negocio: sin ? estado.sinPerfil.negocio : (n.displayName || ""),
       place_id: n.id || "",
-      enlace_maps: enlaceMapas(),
-      ciudad: n.formattedAddress ? ciudad() : "",
+      enlace_maps: sin ? "" : enlaceMapas(),
+      ciudad: sin ? estado.sinPerfil.ciudad : (n.formattedAddress ? ciudad() : ""),
       categoria: n.primaryTypeDisplayName || "",
       estrellas: (n.rating === null || n.rating === undefined) ? "" : n.rating,
       resenas: n.userRatingCount === undefined ? "" : n.userRatingCount,
-      puesto: estado.rank ? (estado.rank.puesto !== null ? estado.rank.puesto : "fuera del top 20") : "",
+      puesto: (!sin && estado.rank) ? (estado.rank.puesto !== null ? estado.rank.puesto : "fuera del top 20") : "",
       clientes_dia: clientesDia() || "",
       ticket: ticketActual() || "",
       como_pide_resenas: opcionComo ? opcionComo.texto : "",
-      ritmo_estimado: estado.rank ? estado.rank.ritmoYo : "",
-      opcion_elegida: p ? p.nombre : "",
-      precio: p ? p.precio : "",
+      ritmo_estimado: (!sin && estado.rank) ? estado.rank.ritmoYo : "",
+      opcion_elegida: opcion,
+      precio: precio,
       toco_whatsapp: estado.tocoWhatsapp ? "SI" : "",
       utm_source: estado.utm.utm_source,
       utm_medium: estado.utm.utm_medium,
@@ -379,19 +547,32 @@
       c.appendChild(crearGuia(false));
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
       c.appendChild(el("p", { class: "texto", texto: t.texto }));
+      c.appendChild(el("p", { class: "pequeno", texto: t.micro }));
       setCta({ texto: t.boton, alHacerClic: function () { ir("contexto"); } });
     }
   };
 
-  /* P2 Contexto */
+  /* P2 Contexto: dos fichas de ejemplo; la A se marca al cabo de 1 segundo */
   PANTALLAS.contexto = {
     render: function (c) {
       const t = TEXTOS.contexto;
       c.appendChild(el("span", { class: "etiqueta", texto: t.etiqueta }));
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
       c.appendChild(el("p", { class: "texto", texto: t.texto }));
+      const fichas = t.fichas.map(function (f) {
+        return el("div", { class: "ficha-mini" },
+          el("span", { class: "ficha-mini__check", "aria-hidden": "true" }, ICONO.check()),
+          el("p", { class: "ficha-mini__nombre", texto: f.nombre }),
+          el("p", { class: "ficha-mini__nota" }, numero(f.rating, { dec: 1 }), estrellas(f.rating)),
+          el("p", { class: "ficha-mini__resenas" }, numero(f.resenas, { suf: " reseñas" })));
+      });
+      c.appendChild(el("div", { class: "ejemplo" },
+        el("span", { class: "ejemplo__etiqueta", texto: t.ejemplo }),
+        el.apply(null, ["div", { class: "fichas" }].concat(fichas))));
+      c.appendChild(el("p", { class: "pregunta-ejemplo", texto: t.pregunta }));
+      pasar(function () { fichas[0].classList.add("ficha-mini--elegida"); }, 1000);
       if (DATO_CONTEXTO && DATO_CONTEXTO.texto) {
-        c.appendChild(el("blockquote", { class: "tarjeta tarjeta--blanca", style: "margin:0" },
+        c.appendChild(el("blockquote", { class: "tarjeta tarjeta--blanca", style: "margin:16px 0 0" },
           el("p", { class: "texto texto--fuerte", style: "margin:0 0 8px", texto: "“" + DATO_CONTEXTO.texto + "”" }),
           DATO_CONTEXTO.fuente ? el("span", { class: "pequeno", texto: DATO_CONTEXTO.fuente }) : null));
       }
@@ -419,7 +600,8 @@
       let lista;
       function continuar() {
         setCta(null);
-        mostrarReaccion(c, lista, REACCION_TICKET, function () { ir("q3"); });
+        lista.classList.add("bloqueadas");
+        mostrarReaccion(c, REACCION_TICKET, function () { ir("q3"); });
       }
       lista = renderPregunta(c, {
         titulo: t.titulo, opciones: OPCIONES_TICKET, cuadricula: true,
@@ -439,7 +621,8 @@
         const valor = Number(solo);
         if (valor >= 1000) {
           estado.ticketExacto = String(valor);
-          lista.querySelectorAll(".opcion").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+          lista.classList.remove("hay-elegida");
+          Array.prototype.forEach.call(lista.querySelectorAll(".opcion"), function (b) { b.setAttribute("aria-pressed", "false"); });
           setCta({ texto: t.boton, alHacerClic: continuar });
         } else {
           estado.ticketExacto = "";
@@ -447,9 +630,10 @@
         }
       }
       campo.addEventListener("input", revisar);
-      c.appendChild(el("div", { class: "campo", style: "margin-top:22px" },
+      const bloqueCampo = el("div", { class: "campo", style: "margin-top:20px" },
         el("label", { for: "monto", texto: t.campo }),
-        el("div", { class: "entrada-moneda" }, campo, el("span", { texto: "COP" }))));
+        el("div", { class: "entrada-moneda" }, campo, el("span", { texto: "COP" })));
+      c.insertBefore(bloqueCampo, c.querySelector(".reaccion-zona"));
       if (estado.ticketExacto) revisar();
     }
   };
@@ -485,7 +669,10 @@
       c.appendChild(el("div", { class: "buscador" }, ICONO.lupa("buscador__lupa"), campo));
       c.appendChild(zona);
       c.appendChild(el("p", { class: "ayuda", texto: t.ayuda }));
-      c.appendChild(el("button", { class: "enlace", type: "button", texto: t.sinPerfil, onclick: function () { ir("sinPerfil"); } }));
+      c.appendChild(el("button", {
+        class: "enlace", type: "button", texto: t.sinPerfil,
+        onclick: function () { estado.ruta = "sin_perfil"; ir("sp1"); }
+      }));
 
       let sugerencias = [];
       let activa = -1;
@@ -566,18 +753,118 @@
     }
   };
 
-  /* P6b Sin perfil */
-  PANTALLAS.sinPerfil = {
+  /* ============================================================
+     RUTA "MI NEGOCIO NO ESTÁ EN GOOGLE" (R1 a R4)
+     ============================================================ */
+
+  /* R1 ¿Qué pasa con tu negocio en Google? */
+  PANTALLAS.sp1 = {
     render: function (c) {
-      const t = TEXTOS.sinPerfil;
-      c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      c.appendChild(el("p", { class: "texto", texto: t.texto }));
-      setCta({
-        texto: t.boton,
-        alHacerClic: function () { pixel("track", "Contact"); abrirWhatsapp(t.mensajeWhatsapp); }
+      const t = TEXTOS.sinPerfil.r1;
+      renderPregunta(c, {
+        titulo: t.titulo, opciones: t.opciones, cuadricula: false,
+        elegida: function () { return estado.servicioOpcionId; },
+        alElegir: function (op) { estado.servicioOpcionId = op.id; estado.servicio = op.servicio; },
+        siguiente: function () { ir("sp2"); }
       });
     }
   };
+
+  /* R2 Problema y solución */
+  PANTALLAS.sp2 = {
+    render: function (c) {
+      const t = TEXTOS.sinPerfil.r2;
+      const s = t[estado.servicio || "crear"];
+      c.appendChild(el("h1", { class: "titulo", texto: s.titulo }));
+      c.appendChild(el("p", { class: "texto", texto: s.texto }));
+      c.appendChild(el("p", { class: "texto texto--fuerte", texto: t.tarjeta }));
+      setCta({ texto: t.boton, alHacerClic: function () { ir("sp3"); } });
+    }
+  };
+
+  /* R3 Contacto */
+  PANTALLAS.sp3 = {
+    render: function (c) {
+      const t = TEXTOS.sinPerfil.r3;
+      formularioContacto(c, {
+        titulo: t.titulo, boton: t.boton, extras: true,
+        alEnviar: function () {
+          guardarLead("contacto");
+          pixel("track", "Lead");
+          ir("sp4");
+        }
+      });
+    }
+  };
+
+  /* R4 Oferta */
+  function precioServicioTexto(srv) {
+    const v = precioNumerico(srv.precio);
+    return v ? "$" + miles(v) : null;
+  }
+  PANTALLAS.sp4 = {
+    render: function (c) {
+      const t = TEXTOS.sinPerfil.r4;
+      const srv = SERVICIOS[estado.servicio || "crear"];
+      if (!estado.opcionSpId) estado.opcionSpId = "pro";
+      c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
+      const precio = precioServicioTexto(srv);
+      c.appendChild(el("div", { class: "tarjeta tarjeta--blanca plan-servicio" },
+        el("p", { class: "plan-servicio__etiqueta", texto: t.etiquetaServicio }),
+        el("p", { class: "plan-servicio__nombre", texto: srv.nombre }),
+        el("p", { class: "plan-servicio__precio", texto: precio || t.precioPendiente })));
+      c.appendChild(el("p", { class: "plan-agregar", texto: t.agregar }));
+
+      const caja = el("div", { class: "productos", role: "group", "aria-label": t.agregar, style: "margin-top:14px;gap:12px" });
+      const botones = {};
+      function tarjetaOpcion(id, nombre, linea2) {
+        const b = el("button", { class: "producto producto--compacto", type: "button", "aria-pressed": "false" },
+          el("div", { class: "producto__fila" }, el("span", { class: "producto__radio" }),
+            el("div", { class: "producto__info" },
+              el("p", { class: "producto__nombre", texto: nombre }),
+              el("p", { class: "producto__linea" + (id === "solo" ? " producto__linea--suave" : ""), texto: linea2 }))));
+        b.addEventListener("click", function () { elegir(id, true); });
+        botones[id] = b;
+        caja.appendChild(b);
+      }
+      PRODUCTOS.forEach(function (p) { tarjetaOpcion(p.id, p.nombre, "+ $" + miles(p.precio)); });
+      tarjetaOpcion("solo", t.soloServicio, t.soloServicioDesc);
+      c.appendChild(caja);
+
+      function elegir(id, guardar) {
+        estado.opcionSpId = id;
+        Object.keys(botones).forEach(function (k) { botones[k].setAttribute("aria-pressed", k === id ? "true" : "false"); });
+        if (guardar) { vibrar(); guardarLead("opcion"); }
+      }
+      function pedir() {
+        estado.tocoWhatsapp = true;
+        guardarLead("whatsapp");
+        pixel("track", "Contact");
+        abrirWhatsapp(mensajeSinPerfil());
+        ir("listo");
+      }
+      elegir(estado.opcionSpId, false);
+      setCta({ texto: t.boton, alHacerClic: pedir });
+    }
+  };
+
+  function mensajeSinPerfil() {
+    const t = TEXTOS.sinPerfil;
+    const srv = SERVICIOS[estado.servicio || "crear"];
+    const p = productoElegido();
+    const neg = estado.sinPerfil.negocio, ciu = estado.sinPerfil.ciudad;
+    return plantilla(t.mensaje, {
+      nombre: estado.contacto.nombre,
+      negocio: neg ? plantilla(t.mensajeNegocio, { valor: neg }) : "",
+      servicio: srv.frase,
+      tarjeta: p ? plantilla(t.mensajeTarjeta, { nombre: p.nombre }) : t.mensajeSoloServicio,
+      ciudad: ciu ? plantilla(t.mensajeCiudad, { valor: ciu }) : ""
+    });
+  }
+
+  /* ============================================================
+     RUTA CON PERFIL
+     ============================================================ */
 
   /* P7 ¿Eres tú? */
   function fotoNegocio(n, clase) {
@@ -636,9 +923,8 @@
       setCta({
         texto: t.boton,
         alHacerClic: async function () {
-          const hayMalas = resenasMalas().length > 0;
-          if (!hayMalas) {
-            // Para mostrar "el #1 de tu zona tiene M" necesitamos a los cercanos antes.
+          // Los casos a) y b) se resuelven con lo que ya tenemos; los demás necesitan a la competencia.
+          if (!casoSinCompetencia()) {
             setCta({ texto: TEXTOS.general.cargando, habilitado: false });
             const lista = await estado.cercanosPromesa;
             if (!lista) { irADemanda(); return; }
@@ -650,54 +936,110 @@
     }
   };
 
-  /* P9 Reseñas */
+  /* P9 Reseñas: se muestra el problema, nunca solo lo bueno */
   function resenasMalas() {
     return ((estado.negocio && estado.negocio.reviews) || []).filter(function (r) { return r.rating <= 3; });
   }
-  function mejorResena() {
-    const todas = ((estado.negocio && estado.negocio.reviews) || []).slice();
-    todas.sort(function (a, b) {
-      return (b.rating - a.rating) || ((b.texto || "").length - (a.texto || "").length);
+  function ultimaResena() {
+    let mejor = null;
+    ((estado.negocio && estado.negocio.reviews) || []).forEach(function (r) {
+      const t = r.publishTime ? new Date(r.publishTime).getTime() : NaN;
+      if (!isNaN(t) && (mejor === null || t > mejor.t)) mejor = { t: t, r: r };
     });
-    return todas[0] || null;
+    return mejor;
   }
-  function tarjetaResena(r) {
+  /** "malas" (a) o "vieja" (b) si ya se pueden decidir sin la competencia; si no, null. */
+  function casoSinCompetencia() {
+    const n = estado.negocio;
+    if (!n.userRatingCount) return null;
+    if (resenasMalas().length) return "malas";
+    const dias = Calculos.diasDesdeUltimaResena(n.reviews);
+    if (dias !== null && dias > DIAS_RESENA_VIEJA) return "vieja";
+    return null;
+  }
+  /** Primer caso que se cumpla: ninguna (0 reseñas) · malas · vieja · pocas · alcanzan. */
+  function casoResenas() {
+    const n = estado.negocio;
+    if (!n.userRatingCount) return "ninguna";
+    const previo = casoSinCompetencia();
+    if (previo) return previo;
+    const rank = asegurarRanking();
+    if (rank && rank.hayCompetencia && rank.puesto !== 1 && estado.cercanos && estado.cercanos[0]) {
+      if (n.userRatingCount < estado.cercanos[0].total / 3) return "pocas";
+    }
+    return "alcanzan";
+  }
+  function tarjetaResena(r, negativa) {
     const meta = [r.autor, r.fecha].filter(Boolean).join(" · ");
     return el("article", { class: "resena" },
-      estrellas(r.rating),
+      negativa ? el("span", { class: "etiqueta-negativa", texto: TEXTOS.resenas.etiquetaNegativa }) : null,
+      el("div", null, estrellas(r.rating)),
       meta ? el("p", { class: "resena__meta", texto: meta }) : null,
       el("p", { class: "resena__texto", texto: r.texto || TEXTOS.resenas.sinTexto }));
+  }
+  function cifra(valor, nombre, op, esYo) {
+    return el("div", { class: "cifra" + (esYo ? " cifra--yo" : "") },
+      el("p", { class: "cifra__numero" }, numero(valor, op)),
+      el("p", { class: "cifra__nombre", texto: nombre }));
+  }
+  function textoNuevas(x) {
+    return x === 1 ? TEXTOS.resenas.nuevaUna : plantilla(TEXTOS.resenas.nuevasVarias, { n: x });
   }
   PANTALLAS.resenas = {
     render: function (c) {
       const t = TEXTOS.resenas;
       const n = estado.negocio;
-      const malas = resenasMalas();
-      if (malas.length) {
+      const caso = casoResenas();
+      const rank = estado.rank;
+
+      if (caso === "malas") {
         c.appendChild(el("h1", { class: "titulo", texto: t.tituloMalas }));
-        c.appendChild(el("p", { class: "subtitulo", texto: t.subtituloMalas }));
         const caja = el("div", { class: "resenas" });
-        malas.forEach(function (r) { caja.appendChild(tarjetaResena(r)); });
+        resenasMalas().forEach(function (r) { caja.appendChild(tarjetaResena(r, true)); });
         c.appendChild(caja);
-      } else {
-        const mejor = mejorResena();
-        c.appendChild(el("h1", { class: "titulo", texto: mejor ? t.tituloBuenas : t.sinResenasTitulo }));
-        if (mejor) {
-          c.appendChild(el("p", { class: "subtitulo", texto: t.mejor }));
-          c.appendChild(el("div", { class: "resenas" }, tarjetaResena(mejor)));
+
+      } else if (caso === "vieja") {
+        const u = ultimaResena();
+        const meses = Math.max(2, Math.floor(Calculos.diasDesdeUltimaResena(n.reviews) / 30));
+        c.appendChild(el("h1", { class: "titulo", texto: plantilla(t.tituloVieja, { x: meses }) }));
+        c.appendChild(el("p", { class: "texto", texto: t.textoVieja }));
+        const fecha = new Date(u.t).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+        c.appendChild(el("div", { class: "tarjeta tarjeta--blanca fecha-ultima" },
+          el("p", { class: "fecha-ultima__etiqueta", texto: t.ultimaResena }),
+          el("p", { class: "fecha-ultima__valor", texto: fecha })));
+
+      } else if (caso === "pocas") {
+        const m = estado.cercanos[0].total;
+        const total = n.userRatingCount;
+        c.appendChild(el("h1", { class: "titulo" }, fragmento(total === 1 ? t.tituloPocasUna : t.tituloPocas, { n: { cuenta: total } })));
+        c.appendChild(el("p", { class: "texto", texto: plantilla(t.textoPocas, { m: miles(m) }) }));
+        c.appendChild(el("div", { class: "cifras" },
+          cifra(total, t.cifraTu, {}, true),
+          cifra(m, t.cifraPrimero, {}, false)));
+
+      } else if (caso === "alcanzan") {
+        c.appendChild(el("h1", { class: "titulo", texto: t.tituloAlcanzan }));
+        const y = rank ? rank.ritmoYo : Calculos.ritmoMensual(n.userRatingCount);
+        const rival = rank && rank.rival ? rank.rival : null;
+        if (rival) {
+          const vecino = rank.puesto === 1;
+          c.appendChild(el("p", { class: "texto", texto: plantilla(vecino ? t.textoAlcanzanVecino : t.textoAlcanzan, { x: textoNuevas(rival.ritmo), y: y }) }));
+          c.appendChild(el("div", { class: "cifras" },
+            cifra(y, t.cifraTu, { pref: "~" }, true),
+            cifra(rival.ritmo, vecino ? t.cifraVecino : t.cifraPrimero, { pref: "~" }, false)));
+          c.appendChild(el("p", { class: "pequeno", style: "text-align:center;margin:8px 0 0", texto: t.cifraAlMes }));
         } else {
-          c.appendChild(el("p", { class: "texto", texto: t.sinResenasTexto }));
+          c.appendChild(el("p", { class: "texto", texto: plantilla(t.textoAlcanzanSolo, { y: textoNuevas(y) }) }));
         }
-        const rank = asegurarRanking();
-        const vars = { n: miles(n.userRatingCount || 0) };
+
+      } else { // ninguna: el negocio todavía no tiene reseñas
+        c.appendChild(el("h1", { class: "titulo", texto: t.sinResenasTitulo }));
+        c.appendChild(el("p", { class: "texto", texto: t.sinResenasTexto }));
+        const vars = { n: miles(0) };
         let frase;
-        if (rank && rank.hayCompetencia && rank.puesto !== 1) {
-          // El #1 de la lista de Google es el primero que no somos nosotros
-          const primero = estado.cercanos[0];
-          vars.m = miles(primero ? primero.total : rank.rival.total);
+        if (rank && rank.hayCompetencia && estado.cercanos && estado.cercanos[0]) {
+          vars.m = miles(estado.cercanos[0].total);
           frase = plantilla(t.comparacion, vars);
-        } else if (rank && rank.puesto === 1 && rank.hayCompetencia) {
-          frase = plantilla(t.comparacionLider, vars);
         } else {
           frase = plantilla(t.comparacionSinRival, vars);
         }
@@ -726,22 +1068,25 @@
         if (estado.actualPantalla !== "analisis") return;
         if (!r[1]) { irADemanda(); return; }
         asegurarRanking();
-        ir("ranking");
+        // Sin un tipo de negocio específico no se compara: se salta el ranking y el "por qué"
+        ir(estado.negocio.tipoComparacion ? "ranking" : "ritmo");
       });
     }
   };
 
   /* P11 Ranking */
-  function filaRanking(f, textoPuesto) {
+  function filaRanking(f, textoPuesto, orden) {
     const t = TEXTOS.ranking;
     const nombre = el("p", { class: "fila__nombre" }, f.nombre);
     if (f.esYo) nombre.appendChild(el("span", { class: "tag-tu", texto: t.etiquetaTu }));
-    return el("div", { class: "fila" + (f.esYo ? " fila--yo" : "") },
+    const fila = el("div", { class: "fila" + (f.esYo ? " fila--yo" : "") },
       el("div", { class: "fila__puesto", texto: String(textoPuesto) }),
       el("div", { class: "fila__datos" },
         nombre,
         lineaCalificacion(f.rating, f.total, null),
         el("p", { class: "fila__ritmo", texto: f.ritmo === 1 ? t.ritmoUno : plantilla(t.ritmo, { x: f.ritmo }) })));
+    fila.style.setProperty("--n", String(orden));
+    return fila;
   }
   PANTALLAS.ranking = {
     render: function (c) {
@@ -752,17 +1097,18 @@
       const caja = el("div", { class: "ranking" },
         el("div", { class: "buscador-falso" }, ICONO.lupa(), el("span", { texto: categoria() + " cerca de mí" })));
       if (rank.hayCompetencia) {
-        rank.top3.forEach(function (f) { caja.appendChild(filaRanking(f, f.puesto)); });
-        if (!rank.yoEnTop3) caja.appendChild(filaRanking(rank.yo, rank.puesto !== null ? rank.puesto : "+20"));
+        let orden = 0;
+        rank.top3.forEach(function (f) { caja.appendChild(filaRanking(f, f.puesto, orden++)); });
+        if (!rank.yoEnTop3) caja.appendChild(filaRanking(rank.yo, rank.puesto !== null ? rank.puesto : "+20", orden++));
       } else {
-        caja.appendChild(filaRanking(rank.yo, 1));
+        caja.appendChild(filaRanking(rank.yo, 1, 0));
       }
       c.appendChild(caja);
-      let resumen;
-      if (!rank.hayCompetencia) resumen = t.sinCompetencia;
-      else if (rank.puesto !== null) resumen = plantilla(t.puesto, { p: rank.puesto, t: rank.total });
-      else resumen = t.fuera;
-      c.appendChild(el("p", { class: "resumen-puesto", texto: resumen }));
+      const resumen = el("p", { class: "resumen-puesto" });
+      if (!rank.hayCompetencia) resumen.textContent = t.sinCompetencia;
+      else if (rank.puesto !== null) resumen.appendChild(fragmento(t.puesto, { p: { cuenta: rank.puesto, desde: 1 }, t: rank.total }));
+      else resumen.textContent = t.fuera;
+      c.appendChild(resumen);
       c.appendChild(el("p", { class: "pequeno", texto: t.nota }));
       setCta({ texto: t.boton, alHacerClic: function () { ir("porque"); } });
     }
@@ -848,12 +1194,18 @@
     }
   };
 
-  /* P14 Tu tarjeta */
+  /* P14 La tarjeta: foto real de la Tarjeta Toque Pro, sin personalizar */
   PANTALLAS.tarjeta = {
     render: function (c) {
       const t = TEXTOS.tarjeta;
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      c.appendChild(crearTarjetaNfc(nombreNegocio(), false));
+      if (IMAGENES.tarjetaPro) {
+        const caja = el("div", { class: "tarjeta-foto" });
+        const img = el("img", { class: "foto-tarjeta", src: IMAGENES.tarjetaPro, alt: t.alt });
+        img.addEventListener("error", function () { caja.remove(); });
+        caja.appendChild(img);
+        c.appendChild(caja);
+      }
       c.appendChild(el("p", { class: "texto", texto: t.texto }));
       setCta({ texto: t.boton, alHacerClic: function () { ir("como"); } });
     }
@@ -873,76 +1225,95 @@
     }
   };
 
-  /* P16 Contacto */
+  /* P16 y R3: formulario de contacto (mismos campos y misma autorización) */
   function normalizarCelular(texto) {
     let d = String(texto).replace(/\D/g, "");
     if (d.length === 12 && d.indexOf("57") === 0) d = d.slice(2);
     return d;
   }
+  function enlacePolitica() {
+    return (POLITICA_URL && POLITICA_URL.indexOf("[") !== 0) ? POLITICA_URL : "#";
+  }
+  function formularioContacto(c, cfg) {
+    const t = TEXTOS.contacto;
+    const r3 = TEXTOS.sinPerfil.r3;
+    c.appendChild(el("h1", { class: "titulo", texto: cfg.titulo }));
+    const k = estado.contacto;
+
+    const nombre = el("input", { class: "entrada", id: "f-nombre", type: "text", autocomplete: "name", autocapitalize: "words", value: k.nombre });
+    const tel = el("input", { class: "entrada", id: "f-tel", type: "tel", inputmode: "numeric", autocomplete: "tel-national", placeholder: "3001234567", value: k.whatsapp ? k.whatsapp.replace(/^57/, "") : "" });
+    const correo = el("input", { class: "entrada", id: "f-correo", type: "email", autocomplete: "email", inputmode: "email", placeholder: "tu@negocio.com", value: k.correo });
+    const errNombre = el("p", { class: "error-campo", id: "e-nombre", hidden: true, texto: t.errorNombre });
+    const errTel = el("p", { class: "error-campo", id: "e-tel", hidden: true, texto: t.errorWhatsapp });
+    const errCorreo = el("p", { class: "error-campo", id: "e-correo", hidden: true, texto: t.errorCorreo });
+    const casilla = el("input", { type: "checkbox", id: "f-auth" });
+    if (estado.autorizacionFecha) casilla.checked = true;
+
+    function campo(etiqueta, input, error) {
+      return el("div", { class: "campo" }, el("label", { for: input.id, texto: etiqueta }), input, error || null);
+    }
+    c.appendChild(campo(t.nombre, nombre, errNombre));
+    c.appendChild(campo(t.whatsapp, tel, errTel));
+    c.appendChild(campo(t.correo, correo, errCorreo));
+    let negocio = null, ciudadCampo = null;
+    if (cfg.extras) {
+      negocio = el("input", { class: "entrada", id: "f-negocio", type: "text", autocomplete: "organization", autocapitalize: "words", value: estado.sinPerfil.negocio });
+      ciudadCampo = el("input", { class: "entrada", id: "f-ciudad", type: "text", autocomplete: "address-level2", autocapitalize: "words", value: estado.sinPerfil.ciudad });
+      c.appendChild(campo(r3.negocio, negocio));
+      c.appendChild(campo(r3.ciudad, ciudadCampo));
+    }
+
+    c.appendChild(el("div", { class: "casilla" }, casilla,
+      el("label", { for: "f-auth" }, t.autorizacion + " ",
+        el("a", { href: enlacePolitica(), target: "_blank", rel: "noopener", texto: t.verPolitica }))));
+    c.appendChild(el("p", { class: "pequeno", texto: t.sinSpam }));
+
+    function validarNombre() { return nombre.value.trim().length >= 2; }
+    function validarTel() { return /^3\d{9}$/.test(normalizarCelular(tel.value)); }
+    function validarCorreo() { const v = correo.value.trim(); return v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
+    function marcar(input, error, ok, mostrar) {
+      const malo = mostrar && !ok;
+      input.setAttribute("aria-invalid", malo ? "true" : "false");
+      if (malo) input.setAttribute("aria-describedby", error.id); else input.removeAttribute("aria-describedby");
+      error.hidden = !malo;
+    }
+    function revisar(mostrar) {
+      const ok = validarNombre() && validarTel() && validarCorreo() && casilla.checked;
+      if (mostrar) {
+        marcar(nombre, errNombre, validarNombre(), nombre.dataset.tocado === "1");
+        marcar(tel, errTel, validarTel(), tel.dataset.tocado === "1");
+        marcar(correo, errCorreo, validarCorreo(), correo.dataset.tocado === "1");
+      }
+      setCta({ texto: cfg.boton, habilitado: ok, alHacerClic: enviar });
+    }
+    [nombre, tel, correo].forEach(function (i) {
+      i.addEventListener("blur", function () { i.dataset.tocado = "1"; revisar(true); });
+      i.addEventListener("input", function () { revisar(true); });
+    });
+    casilla.addEventListener("change", function () { revisar(true); });
+
+    function enviar() {
+      estado.contacto = { nombre: nombre.value.trim(), whatsapp: "57" + normalizarCelular(tel.value), correo: correo.value.trim() };
+      if (cfg.extras) estado.sinPerfil = { negocio: negocio.value.trim(), ciudad: ciudadCampo.value.trim() };
+      estado.autorizacionFecha = new Date().toISOString();
+      cfg.alEnviar();
+    }
+    revisar(false);
+  }
   PANTALLAS.contacto = {
     render: function (c) {
-      const t = TEXTOS.contacto;
-      c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      const k = estado.contacto;
-
-      const nombre = el("input", { class: "entrada", id: "f-nombre", type: "text", autocomplete: "name", autocapitalize: "words", value: k.nombre });
-      const tel = el("input", { class: "entrada", id: "f-tel", type: "tel", inputmode: "numeric", autocomplete: "tel-national", placeholder: "3001234567", value: k.whatsapp ? k.whatsapp.replace(/^57/, "") : "" });
-      const correo = el("input", { class: "entrada", id: "f-correo", type: "email", autocomplete: "email", inputmode: "email", placeholder: "tu@negocio.com", value: k.correo });
-      const errNombre = el("p", { class: "error-campo", id: "e-nombre", hidden: true, texto: t.errorNombre });
-      const errTel = el("p", { class: "error-campo", id: "e-tel", hidden: true, texto: t.errorWhatsapp });
-      const errCorreo = el("p", { class: "error-campo", id: "e-correo", hidden: true, texto: t.errorCorreo });
-      const casilla = el("input", { type: "checkbox", id: "f-auth" });
-      if (estado.autorizacionFecha) casilla.checked = true;
-
-      function campo(etiqueta, input, error) {
-        return el("div", { class: "campo" }, el("label", { for: input.id, texto: etiqueta }), input, error);
-      }
-      c.appendChild(campo(t.nombre, nombre, errNombre));
-      c.appendChild(campo(t.whatsapp, tel, errTel));
-      c.appendChild(campo(t.correo, correo, errCorreo));
-
-      const urlPolitica = /^https?:\/\//.test(POLITICA_URL) ? POLITICA_URL : "#";
-      c.appendChild(el("div", { class: "casilla" }, casilla,
-        el("label", { for: "f-auth" }, t.autorizacion + " ",
-          el("a", { href: urlPolitica, target: "_blank", rel: "noopener", texto: t.verPolitica }))));
-      c.appendChild(el("p", { class: "pequeno", texto: t.sinSpam }));
-
-      function validarNombre() { return nombre.value.trim().length >= 2; }
-      function validarTel() { return /^3\d{9}$/.test(normalizarCelular(tel.value)); }
-      function validarCorreo() { const v = correo.value.trim(); return v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); }
-      function marcar(input, error, ok, mostrar) {
-        const malo = mostrar && !ok;
-        input.setAttribute("aria-invalid", malo ? "true" : "false");
-        if (malo) input.setAttribute("aria-describedby", error.id); else input.removeAttribute("aria-describedby");
-        error.hidden = !malo;
-      }
-      function revisar(mostrar) {
-        const ok = validarNombre() && validarTel() && validarCorreo() && casilla.checked;
-        if (mostrar) {
-          marcar(nombre, errNombre, validarNombre(), nombre.dataset.tocado === "1");
-          marcar(tel, errTel, validarTel(), tel.dataset.tocado === "1");
-          marcar(correo, errCorreo, validarCorreo(), correo.dataset.tocado === "1");
+      formularioContacto(c, {
+        titulo: TEXTOS.contacto.titulo, boton: TEXTOS.contacto.boton, extras: false,
+        alEnviar: function () {
+          guardarLead("contacto");
+          pixel("track", "Lead");
+          ir("precios");
         }
-        setCta({ texto: t.boton, habilitado: ok, alHacerClic: enviar });
-      }
-      [nombre, tel, correo].forEach(function (i) {
-        i.addEventListener("blur", function () { i.dataset.tocado = "1"; revisar(true); });
-        i.addEventListener("input", function () { revisar(true); });
       });
-      casilla.addEventListener("change", function () { revisar(true); });
-
-      function enviar() {
-        estado.contacto = { nombre: nombre.value.trim(), whatsapp: "57" + normalizarCelular(tel.value), correo: correo.value.trim() };
-        estado.autorizacionFecha = new Date().toISOString();
-        guardarLead("contacto");
-        pixel("track", "Lead");
-        ir("precios");
-      }
-      revisar(false);
     }
   };
 
-  /* P17 Elige tu tarjeta */
+  /* P17 Elige tu tarjeta: tres opciones con el mismo alto y la misma estructura */
   PANTALLAS.precios = {
     render: function (c) {
       const t = TEXTOS.precios;
@@ -960,21 +1331,20 @@
       const caja = el("div", { class: "productos", role: "group", "aria-label": "Opciones de tarjeta" });
       const botones = {};
 
+      function foto(src, nombre, envoltura) {
+        const img = el("img", { class: "foto-producto", src: src, alt: nombre, loading: "lazy" });
+        img.addEventListener("error", function () { envoltura.replaceChildren(crearTarjetaNfc()); });
+        return img;
+      }
       function imagenProducto(p) {
-        const ruta = IMAGENES[p.imagen];
         const envoltura = el("div", { class: "producto__imagen" });
-        function dibujada() {
-          if (p.id === "duo") {
-            return el("div", { class: "duo-imagen" }, crearTarjetaNfc(nombreNegocio(), true), crearTarjetaNfc(nombreNegocio(), true));
-          }
-          return crearTarjetaNfc(nombreNegocio(), true);
-        }
-        if (ruta) {
-          const img = el("img", { class: "foto-producto", src: ruta, alt: p.nombre, loading: "lazy" });
-          img.addEventListener("error", function () { envoltura.replaceChildren(dibujada()); });
-          envoltura.appendChild(img);
+        if (p.id === "duo" && !IMAGENES.duo) {
+          envoltura.appendChild(IMAGENES.tarjetaPro ? foto(IMAGENES.tarjetaPro, p.nombre, envoltura) : crearTarjetaNfc());
+          envoltura.appendChild(crearTarjetaNfc());
+        } else if (IMAGENES[p.imagen]) {
+          envoltura.appendChild(foto(IMAGENES[p.imagen], p.nombre, envoltura));
         } else {
-          envoltura.appendChild(dibujada());
+          envoltura.appendChild(crearTarjetaNfc());
         }
         return envoltura;
       }
@@ -1017,7 +1387,7 @@
         Object.keys(botones).forEach(function (k) { botones[k].setAttribute("aria-pressed", k === id ? "true" : "false"); });
         parrafoCosto.textContent = plantilla(t.costoPorResena, { r: miles(pr.r), costo: miles(Calculos.costoPorResena(p.precio, pr.r)) });
         setCta({ texto: plantilla(t.boton, { opcion: p.nombre }), alHacerClic: pedir });
-        if (guardar) guardarLead("opcion");
+        if (guardar) { vibrar(); guardarLead("opcion"); }
       }
       function pedir() {
         estado.tocoWhatsapp = true;
@@ -1042,20 +1412,36 @@
     });
   }
 
-  /* P18 Listo */
+  /* P18 y cierre de R4: Listo, con un check grande que se dibuja una vez */
   PANTALLAS.listo = {
     render: function (c) {
       const t = TEXTOS.listo;
       const p = productoElegido();
+      const sin = estado.ruta === "sin_perfil";
+      c.classList.add("pantalla--listo");
+      c.appendChild(ICONO.checkGrande());
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
       c.appendChild(el("p", { class: "subtitulo", texto: t.resumen }));
+      let filas;
+      if (sin) {
+        const srv = SERVICIOS[estado.servicio || "crear"];
+        const precioSrv = precioServicioTexto(srv);
+        filas = [[t.servicio, srv.nombre + " · " + (precioSrv || t.precioPendiente)]];
+        if (estado.sinPerfil.negocio) filas.push([t.negocio, estado.sinPerfil.negocio]);
+        filas.push([t.tarjeta, p ? p.nombre + " · $" + miles(p.precio) : TEXTOS.sinPerfil.r4.soloServicio]);
+        if (estado.sinPerfil.ciudad) filas.push([t.ciudad, estado.sinPerfil.ciudad]);
+      } else {
+        filas = [[t.negocio, nombreNegocio()], [t.tarjeta, p ? p.nombre : ""], [t.precio, p ? "$" + miles(p.precio) : ""], [t.ciudad, ciudad()]];
+      }
       const lista = el("dl");
-      [[t.negocio, nombreNegocio()], [t.tarjeta, p ? p.nombre : ""], [t.precio, p ? "$" + miles(p.precio) : ""], [t.ciudad, ciudad()]]
-        .forEach(function (par) {
-          lista.appendChild(el("div", null, el("dt", { texto: par[0] }), el("dd", { texto: par[1] })));
-        });
+      filas.forEach(function (par) {
+        lista.appendChild(el("div", null, el("dt", { texto: par[0] }), el("dd", { texto: par[1] })));
+      });
       c.appendChild(el("div", { class: "resumen" }, lista));
-      setCta({ texto: t.boton, alHacerClic: function () { abrirWhatsapp(mensajePedido()); } });
+      setCta({
+        texto: t.boton,
+        alHacerClic: function () { abrirWhatsapp(sin ? mensajeSinPerfil() : mensajePedido()); }
+      });
     }
   };
 

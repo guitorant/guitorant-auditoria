@@ -13,15 +13,19 @@
   <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
-  <!-- Barra de progreso -->
-  <div class="progreso" role="progressbar" aria-label="Progreso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-    <div class="progreso__relleno" id="progreso"></div>
-  </div>
-
-  <!-- Flecha para volver (desde la pantalla 2) -->
-  <button class="atras" id="atras" type="button" aria-label="Volver" hidden>
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-  </button>
+  <!-- Cabecera fija: flecha para volver + barra de progreso + porcentaje -->
+  <header class="cabecera">
+    <div class="cabecera__interior">
+      <button class="atras oculto" id="atras" type="button" aria-label="Volver">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="progreso" role="progressbar" aria-label="Progreso" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progreso__relleno" id="progreso"></div>
+      </div>
+      <span class="porcentaje" id="porcentaje" aria-hidden="true">0%</span>
+    </div>
+    <div class="hito" id="hito" role="status" aria-live="polite"></div>
+  </header>
 
   <!-- Aquí se dibuja cada pantalla -->
   <main class="app" id="app"></main>

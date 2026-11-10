@@ -6,6 +6,7 @@
    - Lo que está entre llaves {así} se reemplaza solo (nombre del negocio, números...).
    - Respeta las comillas "" y las comas al final de cada línea.
    - Los textos que dicen [PENDIENTE] son los que te faltan por completar.
+   - Emojis: solo en las opciones de respuesta y al inicio de las reacciones (uno por elemento).
    ============================================================ */
 
 // ---------- Imágenes (deja "" si no tienes la imagen) ----------
@@ -13,37 +14,95 @@ const IMAGENES = {
   // Personaje guía. Cuando tengas la imagen: "assets/personaje/guia.png"
   // Si está vacío, se muestra un círculo verde con la letra G.
   guia: "",
-  // Fotos de las tarjetas. Si están vacías, la tarjeta se dibuja sola.
+  // Fotos de las tarjetas. Móvil y Dúo no tienen foto todavía: se muestra una tarjeta genérica dibujada.
   tarjetaMovil: "",
   tarjetaPro: "assets/producto/tarjeta-pro.jpg",
   duo: ""
 };
 
-// ---------- Enlaces ----------
-const POLITICA_URL = "[PENDIENTE]"; // Pon aquí el enlace a tu política de datos
+// ---------- Enlaces y contacto ----------
+const POLITICA_URL = "politica.html";
+const CORREO_CONTACTO = "[PENDIENTE]"; // Correo para consultas y reclamos de datos (sale en politica.html)
 
 // ---------- Dato opcional de la pantalla 2 ----------
 // Si "texto" está vacío, no se muestra ninguna tarjeta de dato.
 // Ejemplo: { texto: "El 99% de los clientes lee reseñas antes de visitar un negocio.", fuente: "Nombre de la fuente, año" }
 const DATO_CONTEXTO = { texto: "", fuente: "" };
 
+// ---------- Precios de la ruta "Mi negocio no está en Google" ----------
+// Pon un número (ej: 150000) o deja "[PENDIENTE]". Si está pendiente, se muestra
+// "Te damos el precio por WhatsApp en minutos".
+const PRECIO_CREAR = "[PENDIENTE]";
+const PRECIO_RECLAMAR = "[PENDIENTE]";
+const PRECIO_OPTIMIZAR = "[PENDIENTE]";
+
+// ---------- Competencia y reseñas ----------
+const RADIO_BUSQUEDA_AMPLIADO_M = 5000; // si a 2 km salen pocos del mismo tipo, se busca una vez más a 5 km
+const MIN_RESULTADOS_MISMO_TIPO = 3;    // "pocos" = menos de esto
+const DIAS_RESENA_VIEJA = 60;           // más de estos días sin reseñas = "negocio quieto"
+
+// Nombre amigable (plural) de los tipos de negocio más comunes.
+// Si el tipo no está aquí, se usa el nombre que entrega Google en minúscula.
+const CATEGORIAS = {
+  restaurant: "restaurantes",
+  cafe: "cafés",
+  bakery: "panaderías",
+  beauty_salon: "salones de belleza",
+  hair_care: "peluquerías",
+  hair_salon: "peluquerías",
+  barber_shop: "barberías",
+  nail_salon: "salones de uñas",
+  gym: "gimnasios",
+  dentist: "odontólogos",
+  veterinary_care: "veterinarias",
+  car_repair: "talleres",
+  cell_phone_store: "tiendas de celulares",
+  clothing_store: "tiendas de ropa",
+  pet_store: "tiendas de mascotas",
+  spa: "spas",
+  wellness_center: "centros de bienestar",
+  bar: "bares"
+};
+
+// Familias de tipos que se consideran "el mismo negocio" al comparar.
+// Google a veces devuelve, con el filtro de un tipo, lugares de otro (por ejemplo clínicas de depilación
+// al buscar salones de belleza). Esos se descartan. Todo lo que termine en "_restaurant" cuenta como restaurante.
+// Un tipo que no aparece aquí solo se compara con él mismo.
+const FAMILIAS_TIPOS = [
+  ["beauty_salon", "hair_salon", "hair_care", "nail_salon", "barber_shop", "spa", "wellness_center"],
+  ["cafe", "coffee_shop", "bakery"]
+];
+
+// Tipos demasiado generales: no sirven para comparar con la competencia.
+const TIPOS_GENERICOS = [
+  "establishment", "point_of_interest", "store", "food", "health", "premise",
+  "political", "geocode", "service", "finance", "general_contractor"
+];
+
 // ---------- Textos de las pantallas ----------
 const TEXTOS = {
   bienvenida: {
     titulo: "En 3 minutos sabrás cómo está tu negocio en Google frente a tu competencia.",
-    texto: "Y cuántos clientes más podrías estar recibiendo.",
-    boton: "Empezar"
+    texto: "Y cuántos clientes se están yendo a tu competencia sin que lo sepas.",
+    micro: "Gratis · Sin registrarte · Resultado al instante",
+    boton: "Ver cómo está mi negocio"
   },
   contexto: {
     etiqueta: "LO QUE PASA HOY",
     titulo: "Tus reseñas en Google son tu vitrina.",
-    texto: "Antes de visitar un negocio, la mayoría de las personas revisa sus reseñas en Google. Más reseñas de 5 estrellas significan más clientes que llegan solos.",
+    texto: "Piensa en ellas como los likes de Google: entre más reseñas tengas, y mejores sean, más te muestra Google y más clientes llegan solos. Antes de entrar a un negocio, la mayoría de la gente mira sus estrellas.",
+    ejemplo: "Ejemplo",
+    fichas: [
+      { nombre: "Negocio A", rating: 4.8, resenas: 320 },
+      { nombre: "Negocio B", rating: 3.9, resenas: 12 }
+    ],
+    pregunta: "¿A cuál entrarías tú?",
     boton: "Continuar"
   },
   p1: { titulo: "¿A cuántos clientes atiendes en un día promedio?" },
   p2: {
     titulo: "¿Cuánto gasta en promedio cada cliente?",
-    campo: "Escribe el monto exacto",
+    campo: "O escribe el monto exacto",
     boton: "Continuar"
   },
   p3: { titulo: "¿Cómo consigues hoy tus reseñas?" },
@@ -57,12 +116,57 @@ const TEXTOS = {
     buscando: "Buscando tu negocio…",
     sinResultados: "No encontramos coincidencias. Prueba con el nombre y la ciudad."
   },
+
+  // ----- Ruta "Mi negocio no está en Google" (R1 a R4) -----
   sinPerfil: {
-    titulo: "Te creamos tu perfil en Google.",
-    texto: "Sin perfil, tus clientes no te encuentran. Nosotros lo creamos y te entregamos la tarjeta lista para recibir tus primeras reseñas.",
-    boton: "Hablar por WhatsApp",
-    mensajeWhatsapp: "Hola Guitorant, mi negocio no está en Google y quiero que me ayuden a crear el perfil."
+    r1: {
+      titulo: "¿Qué pasa con tu negocio en Google?",
+      opciones: [
+        { id: "s1", emoji: "🆕", texto: "No existe, nunca lo creamos", servicio: "crear" },
+        { id: "s2", emoji: "🔑", texto: "Existe, pero no tengo acceso o lo creó otra persona", servicio: "reclamar" },
+        { id: "s3", emoji: "📉", texto: "Existe, pero casi no aparece o está incompleto", servicio: "optimizar" },
+        { id: "s4", emoji: "🤔", texto: "No estoy seguro", nota: "Lo revisamos por ti", servicio: "crear" }
+      ]
+    },
+    r2: {
+      crear: {
+        titulo: "Hoy, cuando te buscan, no existes.",
+        texto: "Te creamos tu perfil en Google, lo verificamos y lo dejamos listo con fotos, horario, categoría y ubicación para que te encuentren."
+      },
+      reclamar: {
+        titulo: "Tu negocio está en Google, pero no lo controlas.",
+        texto: "Recuperamos el acceso a tu perfil para que puedas responder reseñas, cambiar fotos y horarios, y que nadie más decida cómo te ven."
+      },
+      optimizar: {
+        titulo: "Estás en Google, pero nadie te ve.",
+        texto: "Completamos y mejoramos tu perfil (categorías, fotos, descripción, horarios) para que aparezcas cuando buscan lo que vendes cerca de ellos."
+      },
+      tarjeta: "Y para que arranque fuerte: con la Tarjeta Toque tus clientes te dejan reseña desde el primer día.",
+      boton: "Quiero esta solución"
+    },
+    r3: {
+      titulo: "¿A dónde te escribimos para empezar?",
+      negocio: "Nombre de tu negocio (opcional)",
+      ciudad: "Ciudad (opcional)",
+      boton: "Ver mi plan"
+    },
+    r4: {
+      titulo: "Tu plan para aparecer en Google",
+      etiquetaServicio: "Tu servicio",
+      precioPendiente: "Te damos el precio por WhatsApp en minutos",
+      agregar: "¿Quieres agregar la tarjeta?",
+      soloServicio: "Solo el servicio",
+      soloServicioDesc: "La tarjeta la pides cuando quieras.",
+      boton: "Pedir por WhatsApp"
+    },
+    // {negocio} y {ciudad} salen solos y quedan vacíos si no los escribió
+    mensaje: "Hola Guitorant, soy {nombre}. Mi negocio{negocio} necesita {servicio} en Google. También quiero {tarjeta}.{ciudad}",
+    mensajeNegocio: " {valor}",
+    mensajeCiudad: " Estoy en {valor}.",
+    mensajeSoloServicio: "solo el servicio",
+    mensajeTarjeta: "la {nombre}"
   },
+
   eresTu: {
     titulo: "¿Eres tú?",
     boton: "Sí, es mi negocio",
@@ -75,23 +179,41 @@ const TEXTOS = {
     sinResenas: "Sin reseñas todavía"
   },
   resenas: {
-    tituloMalas: "Esto es lo primero que leen tus clientes.",
-    subtituloMalas: "Reseñas que pesan en tu perfil",
-    tituloBuenas: "Tus clientes te quieren, pero pocos lo dicen en Google.",
-    // {n} = tus reseñas, {m} = reseñas del #1 de tu zona
-    comparacion: "Tienes {n} reseñas. El negocio #1 de tu zona tiene {m}.",
-    comparacionSinRival: "Tienes {n} reseñas. Cada cliente que te califica sube tu posición.",
-    comparacionLider: "Tienes {n} reseñas y hoy lideras tu zona. Mantener el ritmo es lo que te sostiene arriba.",
+    // a) hay reseñas de 3 estrellas o menos
+    tituloMalas: "Esto es lo que leen tus clientes antes de elegirte.",
+    etiquetaNegativa: "Reseña negativa",
+    // b) la reseña más reciente tiene más de 60 días ({x} = meses)
+    tituloVieja: "Hace {x} meses nadie deja una reseña en tu negocio.",
+    textoVieja: "Para Google, un negocio sin reseñas recientes parece un negocio quieto, y lo baja en los resultados.",
+    ultimaResena: "Última reseña",
+    // c) menos de la tercera parte de reseñas que el #1 ({n} = tus reseñas, {m} = las del #1)
+    tituloPocas: "Solo {n} personas han hablado de tu negocio en Google.",
+    tituloPocasUna: "Solo {n} persona ha hablado de tu negocio en Google.",
+    textoPocas: "El #1 de tu zona tiene {m}. Cuando alguien compara, gana el que más se ve.",
+    // d) todo lo demás ({x} = ritmo del rival, {y} = tu ritmo)
+    tituloAlcanzan: "Tu perfil está bien, pero te están alcanzando.",
+    textoAlcanzan: "El #1 recibe {x} al mes y tú ~{y}.",
+    textoAlcanzanVecino: "Tu competidor más cercano recibe {x} al mes y tú ~{y}.",
+    textoAlcanzanSolo: "Tú recibes {y} al mes. Mantener ese ritmo es lo que te sostiene arriba.",
+    nuevasVarias: "~{n} reseñas nuevas",
+    nuevaUna: "~1 reseña nueva",
+    // cifras
+    cifraTu: "Tú",
+    cifraPrimero: "El #1 de tu zona",
+    cifraVecino: "Competidor más cercano",
+    cifraAlMes: "reseñas nuevas al mes",
+    // negocio sin ninguna reseña
     sinResenasTitulo: "Tu perfil todavía no tiene reseñas.",
     sinResenasTexto: "Cada cliente que te califique empieza a construir tu vitrina en Google.",
+    comparacion: "Tienes {n} reseñas. El negocio #1 de tu zona tiene {m}.",
+    comparacionSinRival: "Tienes {n} reseñas. Cada cliente que te califica sube tu posición.",
     sinTexto: "Esta persona dejó su calificación sin comentario.",
-    mejor: "Tu mejor reseña",
     boton: "Ver mi posición"
   },
   analisis: {
     titulo: "Revisando quiénes están cerca de ti…",
     // {categoria} = tipo de negocio
-    lineas: ["Buscando {categoria} a 2 km", "Comparando reseñas", "Calculando tu posición"]
+    lineas: ["Buscando {categoria} cerca de ti", "Comparando reseñas", "Calculando tu posición"]
   },
   ranking: {
     titulo: "Cuando alguien busca “{categoria} cerca de mí”…",
@@ -101,7 +223,7 @@ const TEXTOS = {
     ritmoUno: "~1 reseña nueva al mes",
     puesto: "Estás en el puesto #{p} de {t}.",
     fuera: "No apareces entre los primeros 20 de tu zona.",
-    sinCompetencia: "No encontramos otros negocios de tu categoría a 2 km. Eres de los pocos que Google muestra en tu zona.",
+    sinCompetencia: "No encontramos otros negocios de tu categoría cerca. Eres de los pocos que Google muestra en tu zona.",
     nota: "Ritmo mensual estimado por Guitorant a partir de las reseñas públicas.",
     boton: "¿Por qué ellos?"
   },
@@ -129,9 +251,12 @@ const TEXTOS = {
     boton: "Ver mi tarjeta"
   },
   tarjeta: {
-    titulo: "Así se vería tu tarjeta.",
-    texto: "Con tu logo y programada con tu perfil de Google. Solo la pones donde tus clientes pagan.",
+    titulo: "Esta es la Tarjeta Toque Pro.",
+    texto: "Va en tu mostrador o en la mesa, con su propio soporte. Tus clientes la ven, acercan el celular y te dejan su reseña.",
+    alt: "Tarjeta Toque Pro con su soporte",
+    // Texto de la tarjeta genérica dibujada (Móvil y Dúo)
     califica: "Califícanos en Google",
+    acerca: "Acerca tu celular",
     boton: "¿Cómo funciona?"
   },
   como: {
@@ -174,6 +299,8 @@ const TEXTOS = {
     tarjeta: "Tarjeta",
     precio: "Precio",
     ciudad: "Ciudad",
+    servicio: "Servicio",
+    precioPendiente: "Te lo damos por WhatsApp",
     boton: "Abrir WhatsApp otra vez"
   },
   // {resumen} se completa solo
@@ -190,39 +317,57 @@ const TEXTOS = {
     boton: "Escribir por WhatsApp",
     mensajeWhatsapp: "Hola Guitorant, ya hice mis auditorías de hoy y quiero terminar la mía por WhatsApp."
   },
+  progreso: {
+    mitad: "Vas a mitad de camino",
+    ultimo: "Último paso"
+  },
   general: {
     volver: "Volver",
-    cargando: "Un momento…"
+    cargando: "Un momento…",
+    continuar: "Continuar"
   }
 };
 
+// ---------- Servicios de la ruta "no está en Google" ----------
+// "frase" se usa en el mensaje de WhatsApp: "necesita {frase} en Google".
+const SERVICIOS = {
+  crear:     { nombre: "Crear perfil",    frase: "crear su perfil",    precio: PRECIO_CREAR },
+  reclamar:  { nombre: "Reclamar perfil", frase: "reclamar su perfil", precio: PRECIO_RECLAMAR },
+  optimizar: { nombre: "Optimizar perfil", frase: "optimizar su perfil", precio: PRECIO_OPTIMIZAR }
+};
+
 // ---------- Opciones de las preguntas ----------
-// "id" lo usan los cálculos (js/calculos.js). No lo cambies; sí puedes cambiar "texto" y "reaccion".
+// "id" lo usan los cálculos (js/calculos.js). No lo cambies; sí puedes cambiar "texto", "emoji" y "reaccion".
 const OPCIONES_CLIENTES = [
-  { id: "c1", texto: "Menos de 30",  reaccion: "Cada cliente cuenta. Que cada uno deje su reseña marca la diferencia." },
-  { id: "c2", texto: "30 a 100",     reaccion: "Buen flujo. Ahí hay material para decenas de reseñas al mes." },
-  { id: "c3", texto: "100 a 300",    reaccion: "Mucho movimiento. Si solo una parte deja reseña, pasas a tu competencia rápido." },
-  { id: "c4", texto: "Más de 300",   reaccion: "Tráfico de líder. Tu perfil debería verse como el del #1 de tu zona." }
+  { id: "c1", emoji: "🧍", texto: "Menos de 30", reaccion: "🤝 Cada cliente cuenta. Que cada uno deje su reseña marca la diferencia." },
+  { id: "c2", emoji: "👥", texto: "30 a 100",    reaccion: "👍 Buen flujo. Ahí hay material para decenas de reseñas al mes." },
+  { id: "c3", emoji: "🔥", texto: "100 a 300",   reaccion: "📈 Mucho movimiento. Si solo una parte deja reseña, pasas a tu competencia rápido." },
+  { id: "c4", emoji: "🚀", texto: "Más de 300",  reaccion: "🏆 Tráfico de líder. Tu perfil debería verse como el del #1 de tu zona." }
 ];
 
 const OPCIONES_TICKET = [
-  { id: "t1", texto: "Menos de $25.000" },
-  { id: "t2", texto: "$25.000 a $200.000" },
-  { id: "t3", texto: "$200.000 a $500.000" },
-  { id: "t4", texto: "Más de $500.000" }
+  { id: "t1", emoji: "☕", texto: "Menos de $25.000" },
+  { id: "t2", emoji: "🛍️", texto: "$25.000 a $200.000" },
+  { id: "t3", emoji: "💳", texto: "$200.000 a $500.000" },
+  { id: "t4", emoji: "💎", texto: "Más de $500.000" }
 ];
-const REACCION_TICKET = "Anotado. Con esto calculamos cuánto vale para ti cada cliente nuevo.";
+const REACCION_TICKET = "📝 Anotado. Con esto calculamos cuánto vale para ti cada cliente nuevo.";
 
 const OPCIONES_RESENAS = [
-  { id: "r1", texto: "Casi no las pedimos",         reaccion: "Es lo más común, y justo ahí está la oportunidad." },
-  { id: "r2", texto: "El personal las pide en persona", reaccion: "Buen hábito. El problema: el cliente dice que sí y luego se le olvida." },
-  { id: "r3", texto: "Las pedimos por WhatsApp",    reaccion: "Funciona a medias: el mensaje llega cuando el cliente ya se fue." },
-  { id: "r4", texto: "Tenemos un código QR",        reaccion: "Buen inicio. Pero abrir la cámara y escanear le quita ganas a mucha gente." },
-  { id: "r5", texto: "Pagamos una herramienta",     reaccion: "Bien. Veamos si te está dando los resultados que pagas." }
+  { id: "r1", emoji: "🤷", texto: "Casi no las pedimos",              reaccion: "💡 Es lo más común, y justo ahí está la oportunidad." },
+  { id: "r2", emoji: "🗣️", texto: "El personal las pide en persona", reaccion: "🧠 Buen hábito. El problema: el cliente dice que sí y luego se le olvida." },
+  { id: "r3", emoji: "💬", texto: "Las pedimos por WhatsApp",         reaccion: "📲 Funciona a medias: el mensaje llega cuando el cliente ya se fue." },
+  { id: "r4", emoji: "📱", texto: "Tenemos un código QR",             reaccion: "📷 Buen inicio. Pero abrir la cámara y escanear le quita ganas a mucha gente." },
+  { id: "r5", emoji: "🧾", texto: "Pagamos una herramienta",          reaccion: "🔍 Bien. Veamos si te está dando los resultados que pagas." }
 ];
 
-// Duración de la burbuja de reacción (milisegundos)
-const DURACION_REACCION_MS = 1500;
+// ---------- Duración de las reacciones del personaje (milisegundos) ----------
+// Mínimo 3 s; si el texto es largo, unos 250 ms por palabra, con tope de 5 s.
+// Antes del mensaje salen 3 puntos de "escribiendo…". Tocar la burbuja avanza de inmediato.
+const REACCION_MIN_MS = 3000;
+const REACCION_MAX_MS = 5000;
+const REACCION_MS_POR_PALABRA = 250;
+const REACCION_ESCRIBIENDO_MS = 600;
 
 // ---------- Productos y precios (en pesos) ----------
 const PRODUCTOS = [
@@ -232,7 +377,7 @@ const PRODUCTOS = [
     precio: 49900,
     precioAntes: null,
     etiqueta: "",
-    descripcion: "[DESCRIPCIÓN PENDIENTE]",
+    descripcion: "Del tamaño de una tarjeta de crédito. Tu mesero o vendedor la lleva encima y la acerca al cliente justo cuando termina de atenderlo.",
     imagen: "tarjetaMovil"
   },
   {
@@ -241,7 +386,7 @@ const PRODUCTOS = [
     precio: 69900,
     precioAntes: null,
     etiqueta: "",
-    descripcion: "[DESCRIPCIÓN PENDIENTE]",
+    descripcion: "Tipo hablador, con soporte propio. Va en el mostrador o en la mesa, a la vista de todos, pidiendo reseñas sin que nadie tenga que hacerlo.",
     imagen: "tarjetaPro"
   },
   {
@@ -250,7 +395,7 @@ const PRODUCTOS = [
     precio: 99900,
     precioAntes: 119800,
     etiqueta: "MEJOR VALOR · Ahorras $19.900",
-    descripcion: "[DESCRIPCIÓN PENDIENTE]",
+    descripcion: "La Pro fija donde pagan y la Móvil en manos de tu equipo. Cubres a cada cliente: el que pasa por caja y el que atiendes en la mesa.",
     imagen: "duo",
     preseleccionada: true
   }

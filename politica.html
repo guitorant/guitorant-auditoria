@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Política de tratamiento de datos | Guitorant</title>
+  <meta name="description" content="Política de tratamiento de datos personales de Guitorant, según la Ley 1581 de 2012 y el Decreto 1377 de 2013.">
+  <meta name="theme-color" content="#FFFFFF">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Tenor+Sans&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%2315803D'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='Georgia,serif'%3EG%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+  <main class="documento">
+    <a class="volver" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      Volver al formulario
+    </a>
+
+    <h1>Política de tratamiento de datos personales</h1>
+    <p class="fecha">Vigente desde el 9 de noviembre de 2026. Elaborada según la Ley 1581 de 2012 y el Decreto 1377 de 2013.</p>
+
+    <h2>1. Responsable del tratamiento</h2>
+    <ul>
+      <li><strong>Responsable:</strong> Guitorant (razón social).</li>
+      <li><strong>Responsable legal:</strong> Nicolás Gordillo Niño.</li>
+      <li><strong>Domicilio:</strong> Bogotá, Colombia.</li>
+      <li><strong>Correo de contacto:</strong> <span data-dato="correo">[PENDIENTE]</span></li>
+      <li><strong>Teléfono y WhatsApp:</strong> <span data-dato="telefono">+57 320 224 3791</span></li>
+    </ul>
+
+    <h2>2. Datos que recogemos</h2>
+    <ul>
+      <li>Nombre.</li>
+      <li>Número de WhatsApp.</li>
+      <li>Correo electrónico (opcional).</li>
+      <li>Nombre del negocio.</li>
+      <li>Respuestas que das en el formulario.</li>
+      <li>Datos públicos de tu negocio en Google (nombre, dirección, calificación, reseñas y competidores cercanos).</li>
+    </ul>
+
+    <h2>3. Finalidades del tratamiento</h2>
+    <ul>
+      <li>Contactarte sobre tu auditoría o tu solicitud.</li>
+      <li>Ofrecerte productos y servicios de Guitorant por WhatsApp y correo electrónico.</li>
+      <li>Hacer estadísticas internas.</li>
+    </ul>
+
+    <h2>4. Proveedores y almacenamiento</h2>
+    <p>Tus datos se guardan en servicios de Google (Google Sheets), que pueden almacenarlos en servidores fuera de Colombia.</p>
+
+    <h2>5. Tus derechos como titular</h2>
+    <p>Según el artículo 8 de la Ley 1581 de 2012, tienes derecho a:</p>
+    <ul>
+      <li>Conocer, actualizar y rectificar tus datos personales.</li>
+      <li>Pedir prueba de la autorización que nos diste.</li>
+      <li>Ser informado, previa solicitud, del uso que se ha dado a tus datos.</li>
+      <li>Presentar quejas ante la Superintendencia de Industria y Comercio por infracciones a la ley.</li>
+      <li>Revocar la autorización y pedir la supresión de tus datos.</li>
+      <li>Acceder de forma gratuita a tus datos personales.</li>
+    </ul>
+
+    <h2>6. Cómo ejercer tus derechos</h2>
+    <p>Escríbenos por correo electrónico o por WhatsApp a los datos de contacto del punto 1.</p>
+    <ul>
+      <li><strong>Consultas:</strong> las respondemos en un máximo de 10 días hábiles, prorrogables por 5 días hábiles más.</li>
+      <li><strong>Reclamos:</strong> los respondemos en un máximo de 15 días hábiles, prorrogables por 8 días hábiles más.</li>
+    </ul>
+
+    <h2>7. Conservación de los datos</h2>
+    <p>Conservamos tus datos mientras sea necesario para las finalidades descritas o hasta que pidas su supresión.</p>
+
+    <h2>8. Vigencia</h2>
+    <p>Esta política rige desde el 9 de noviembre de 2026.</p>
+
+    <p style="margin-top:32px"><a class="volver" href="index.html">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+      Volver al formulario
+    </a></p>
+  </main>
+
+  <!-- Los datos de contacto salen de js/config.js y js/datos.js para que no haya que editarlos en dos sitios -->
+  <script src="js/config.js"></script>
+  <script src="js/datos.js"></script>
+  <script>
+    (function () {
+      try {
+        var d = String(WHATSAPP_VENTAS).replace(/\D/g, "");
+        if (/^57\d{10}$/.test(d)) {
+          document.querySelector('[data-dato="telefono"]').textContent =
+            "+57 " + d.slice(2, 5) + " " + d.slice(5, 8) + " " + d.slice(8);
+        }
+        document.querySelector('[data-dato="correo"]').textContent = CORREO_CONTACTO;
+      } catch (e) { /* se queda el texto de respaldo */ }
+    })();
+  </script>
+</body>
+</html>
