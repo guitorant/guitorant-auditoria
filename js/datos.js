@@ -87,7 +87,6 @@ const TIPOS_GENERICOS = [
 // ---------- Textos de las pantallas ----------
 const TEXTOS = {
   bienvenida: {
-    etiquetaNavidad: "Edición Navidad 🎄",
     titulo: "En 3 minutos sabrás cómo está tu negocio en Google frente a tu competencia.",
     texto: "Y cuántos clientes se están yendo a tu competencia sin que lo sepas.",
     micro: "Gratis · Sin registrarte · Resultado al instante",
@@ -195,13 +194,14 @@ const TEXTOS = {
     listaTitulo: "Lo que mira un cliente antes de elegirte",
     falta: "Falta",
     mejorable: "Mejorable",
+    // Textos cortos de los 6 puntos ("detalle" sale al dejar el dedo o el cursor encima)
     puntos: [
-      { id: "telefono", texto: "Teléfono visible" },
-      { id: "horario", texto: "Horario publicado" },
-      { id: "web", texto: "Sitio web o red social" },
-      { id: "fotos", texto: "Fotos del negocio" },
-      { id: "recientes", texto: "Reseñas recientes (la última en los últimos 30 días)" },
-      { id: "mas50", texto: "Más de 50 reseñas" }
+      { id: "telefono", texto: "Teléfono", detalle: "Teléfono visible en tu perfil" },
+      { id: "horario", texto: "Horario", detalle: "Horario publicado" },
+      { id: "web", texto: "Sitio web", detalle: "Sitio web o red social" },
+      { id: "fotos", texto: "Fotos", detalle: "Fotos del negocio" },
+      { id: "recientes", texto: "Reseñas recientes", detalle: "La última reseña es de los últimos 30 días" },
+      { id: "mas50", texto: "Más de 50 reseñas", detalle: "Más de 50 reseñas en total" }
     ]
   },
   resenas: {
@@ -316,8 +316,11 @@ const TEXTOS = {
     franja: "Pago único. Sin mensualidades.",
     // {r} = reseñas al mes, {costo} = costo por reseña
     costoPorResena: "Con ~{r} reseñas al mes, cada reseña te costaría menos de ${costo} el primer año.",
-    menosPorDia: "Menos de ${d} al día durante un año",
-    sePaga: { uno: "Se paga con 1 cliente nuevo", varios: "Se paga con {n} clientes nuevos" },
+    // Línea de valor según el ticket del negocio. {ticket} = gasto promedio, {n} = clientes que equivale, {m} = n + 1
+    valorMenor: "Cuesta menos que 1 cliente de tu negocio ({ticket})",
+    valorMenorGanancia: "Desde el cliente 2, todo es ganancia.",
+    valorMayor: "Equivale a {n} clientes de tu negocio",
+    valorMayorGanancia: "Desde el cliente {m}, todo es ganancia.",
     colorEtiqueta: "Color",
     elegir: "Elegir",
     elegida: "Elegida",

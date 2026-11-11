@@ -66,7 +66,7 @@ Los **supuestos de los cálculos** (clientes por día, tasa de reseña con tarje
    - Restricciones de API: solo Maps JavaScript API y Places API (New).
 6. Abre `js/config.js`, pega la clave en `CLAVE_GOOGLE` y cambia `MODO_DEMO` a `false`.
 
-La clave de Google Maps en una página web es visible para cualquiera; por eso la restricción por sitio es lo que la protege. Además, la página limita a 3 auditorías por día por navegador (`MAX_AUDITORIAS_POR_DIA`), solo cuando el modo demo está apagado.
+La clave de Google Maps en una página web es visible para cualquiera; por eso la restricción por sitio es lo que la protege. Además, la página limita a 10 auditorías por día por navegador (`MAX_AUDITORIAS_POR_DIA`), solo cuando el modo demo está apagado.
 
 Cada auditoría hace: 1 autocompletado + 1 detalle + 1 foto + 1 búsqueda de cercanos (2 si a 2 km salen menos de 3 negocios del mismo tipo: la segunda es a 5 km).
 

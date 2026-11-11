@@ -244,14 +244,10 @@
   function crearGuia(chica) {
     const caja = el("div", { class: "guia" + (chica ? " guia--chica" : ""), "aria-hidden": "true" });
     const circulo = el("div", { class: "guia__circulo" });
-    function letra() { circulo.textContent = "G"; }
-    if (IMAGENES.guia) {
-      const img = el("img", { src: IMAGENES.guia, alt: "" });
-      img.addEventListener("error", letra);
-      circulo.appendChild(img);
-    } else {
-      letra();
-    }
+    // El personaje es el logo de Guitorant (o la imagen de IMAGENES.guia si algún día pones una)
+    const img = el("img", { src: IMAGENES.guia || "assets/marca/logo-guitorant.webp", alt: "", width: "120", height: "120" });
+    img.addEventListener("error", function () { circulo.textContent = "G"; });
+    circulo.appendChild(img);
     caja.appendChild(circulo);
     if (TEMA_NAVIDAD) caja.appendChild(svg(GORRO_SVG, "guia__gorro", "0 0 68 48"));
     return caja;
@@ -341,16 +337,23 @@
     return caja;
   }
 
+  /** Flecha negra dentro de un círculo blanco de 28 px (va a la derecha del texto de los botones). */
+  function circuloFlecha() {
+    return el("span", { class: "boton__circulo", "aria-hidden": "true" }, ICONO.flecha());
+  }
+
   /* ---------- Botón principal fijo ---------- */
   function setCta(opciones) {
     if (!opciones) {
       $barraCta.hidden = true; ctaAccion = null;
+      $cta.classList.remove("boton--confirmar");
       document.body.classList.remove("con-cta");
       return;
     }
     $barraCta.hidden = false;
     document.body.classList.add("con-cta");
-    $cta.replaceChildren(el("span", { texto: opciones.texto }), ICONO.flecha("boton__flecha"));
+    $cta.replaceChildren(el("span", { texto: opciones.texto }), circuloFlecha());
+    $cta.classList.toggle("boton--confirmar", !!opciones.confirmar);
     $cta.disabled = opciones.habilitado === false;
     ctaAccion = opciones.alHacerClic;
   }
@@ -405,7 +408,7 @@
     estado.actualPantalla = id;
     if (id === "busqueda") estado.ruta = null; // al volver al buscador se deja la ruta "sin perfil"
     const cont = el("section", { class: "pantalla", "data-pantalla": id });
-    $app.classList.toggle("app--ancha", !!def.ancha);
+    $app.className = "app" + (def.ancha ? " app--ancha" : "") + (def.claseApp ? " " + def.claseApp : "");
     $app.replaceChildren(cont);
     window.scrollTo(0, 0);
     setCta(null);
@@ -639,7 +642,6 @@
       const t = TEXTOS.bienvenida;
       c.classList.add("bienvenida");
       c.appendChild(crearGuia(false));
-      if (TEMA_NAVIDAD) c.appendChild(el("span", { class: "etiqueta-navidad", texto: t.etiquetaNavidad }));
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
       c.appendChild(el("p", { class: "texto", texto: t.texto }));
       c.appendChild(el("p", { class: "pequeno", texto: t.micro }));
@@ -956,7 +958,7 @@
         ir("listo");
       }
       elegir(estado.opcionSpId, false);
-      setCta({ texto: t.boton, alHacerClic: pedir });
+      setCta({ texto: t.boton, alHacerClic: pedir, confirmar: true });
     }
   };
 
@@ -1007,14 +1009,14 @@
       }
       const acciones = el("div", { class: "negocio-card__acciones" },
         el("button", {
-          class: "boton", type: "button",
+          class: "boton boton--confirmar", type: "button",
           onclick: function () {
             if (limiteAlcanzado()) { ir("limite"); return; }
             sumarAuditoria();
             iniciarCercanos();
             ir("perfil");
           }
-        }, el("span", { texto: t.boton }), ICONO.flecha("boton__flecha")),
+        }, el("span", { texto: t.boton }), circuloFlecha()),
         el("button", {
           class: "enlace enlace--centro", type: "button", texto: t.otro,
           onclick: function () { estado.negocio = null; volver(); }
@@ -1031,6 +1033,7 @@
     return el("p", { class: "dato-linea" + (apagada ? " dato-linea--apagada" : "") }, icono, hijo);
   }
   PANTALLAS.perfil = {
+    claseApp: "app--perfil",
     render: function (c) {
       const t = TEXTOS.perfil;
       const n = estado.negocio;
@@ -1057,26 +1060,32 @@
       filas.appendChild(n.telefono
         ? filaDato(ICONO.telefono("dato-linea__icono"), el("span", { texto: n.telefono }))
         : filaDato(ICONO.telefono("dato-linea__icono"), el("span", { texto: t.sinTelefono }), true));
-      filas.appendChild(n.sitioWeb
+      const web = n.sitioWeb
         ? filaDato(ICONO.web("dato-linea__icono"), el("span", { texto: hostWeb(n.sitioWeb) }))
-        : filaDato(ICONO.web("dato-linea__icono"), el("span", { texto: t.sinWeb }), true));
+        : filaDato(ICONO.web("dato-linea__icono"), el("span", { texto: t.sinWeb }), true);
+      web.classList.add("dato-linea--web"); // en celular se oculta para que todo quepa en una pantalla
+      filas.appendChild(web);
       cuerpo.appendChild(filas);
-      c.appendChild(el("div", { class: "mapa" }, fotoNegocio(n, "foto-negocio"), cuerpo));
+      const ficha = el("div", { class: "mapa" }, fotoNegocio(n, "foto-negocio"), cuerpo);
 
-      // Puntaje y lista de 6 puntos
-      c.appendChild(el("p", { class: "puntaje" }, fragmento(t.puntaje, { x: { cuenta: res.puntaje } })));
-      c.appendChild(el("h2", { class: "lista-titulo", texto: t.listaTitulo }));
+      // Puntaje y los 6 puntos (cuadrícula de 2 columnas en celular)
+      const cabecera = el("div", { class: "perfil-puntaje" },
+        el("p", { class: "puntaje" }, fragmento(t.puntaje, { x: { cuenta: res.puntaje } })),
+        el("h2", { class: "lista-titulo", texto: t.listaTitulo }));
       const lista = el("ul", { class: "chequeo" });
       res.puntos.forEach(function (pt, i) {
         const textos = t.puntos.filter(function (x) { return x.id === pt.id; })[0];
-        const estadoCaja = pt.estado === "ok"
+        const bien = pt.estado === "ok";
+        // A la derecha de cada punto: un check verde si está bien, o la etiqueta roja "Falta" / "Mejorable"
+        const estadoCaja = bien
           ? el("span", { class: "chequeo__ok", role: "img", "aria-label": "Bien" }, ICONO.check())
           : el("span", { class: "chequeo__etq", texto: pt.estado === "falta" ? t.falta : t.mejorable });
-        const li = el("li", { class: "chequeo__item chequeo__item--" + pt.estado }, el("span", { class: "chequeo__texto", texto: textos.texto }), estadoCaja);
+        const li = el("li", { class: "chequeo__item chequeo__item--" + pt.estado, title: textos.detalle },
+          el("span", { class: "chequeo__texto", texto: textos.texto }), estadoCaja);
         li.style.setProperty("--n", String(i));
         lista.appendChild(li);
       });
-      c.appendChild(lista);
+      c.appendChild(el("div", { class: "perfil-grid" }, ficha, el("div", { class: "perfil-der" }, cabecera, lista)));
       setCta({
         texto: t.boton,
         alHacerClic: async function () {
@@ -1507,7 +1516,7 @@
         marcar(tel, errTel, validarTel(), tel.dataset.tocado === "1");
         marcar(correo, errCorreo, validarCorreo(), correo.dataset.tocado === "1");
       }
-      setCta({ texto: cfg.boton, habilitado: ok, alHacerClic: enviar });
+      setCta({ texto: cfg.boton, habilitado: ok, alHacerClic: enviar, confirmar: true });
     }
     [nombre, tel, correo].forEach(function (i) {
       i.addEventListener("blur", function () { i.dataset.tocado = "1"; revisar(true); });
@@ -1548,7 +1557,7 @@
         estado.opcionId = pre.id;
       }
       c.classList.add("pantalla--precios");
-      const parrafoCosto = el("p", { class: "texto texto--fuerte texto--centro", style: "margin:0" });
+      const parrafoCosto = el("div", { class: "franja franja--costo" });
       const cabecera = el("div", { class: "precios__cabecera" },
         el("h1", { class: "titulo titulo--centro", texto: plantilla(t.titulo, { negocio: nombreNegocio() }) }));
       if (navidadVigente()) cabecera.appendChild(el("div", { class: "franja franja--navidad", texto: t.navidad }));
@@ -1562,7 +1571,17 @@
       PRODUCTOS.forEach(function (p) {
         const color = colorDe(p);
         const opFoto = { sizes: "(min-width: 768px) 300px, 90vw", lazy: true };
-        const clientes = Calculos.clientesParaPagar(p.precio, ticket);
+        const equivale = Calculos.clientesEquivalentes(p.precio, ticket);
+        let valor1 = "", valor2 = "";
+        if (equivale !== null) {
+          if (p.precio <= ticket) {
+            valor1 = plantilla(t.valorMenor, { ticket: "$" + miles(ticket) });
+            valor2 = t.valorMenorGanancia;
+          } else {
+            valor1 = plantilla(t.valorMayor, { n: equivale });
+            valor2 = plantilla(t.valorMayorGanancia, { m: equivale + 1 });
+          }
+        }
         const foto = fotoProducto(p, color, { clase: "tarjeta-precio__foto", sizes: opFoto.sizes, lazy: true });
         if (p.etiqueta) foto.appendChild(el("span", { class: "cinta", texto: p.etiqueta }));
         foto.appendChild(el("span", { class: "tarjeta-precio__check", "aria-hidden": "true" }, ICONO.check()));
@@ -1575,8 +1594,9 @@
           el("h2", { class: "tarjeta-precio__nombre", texto: p.nombre }),
           el("p", { class: "tarjeta-precio__desc", texto: p.descripcion }),
           precioFila,
-          el("p", { class: "tarjeta-precio__linea tarjeta-precio__linea--suave", texto: plantilla(t.menosPorDia, { d: miles(Calculos.precioPorDia(p.precio)) }) }),
-          clientes ? el("p", { class: "tarjeta-precio__linea", texto: clientes === 1 ? t.sePaga.uno : plantilla(t.sePaga.varios, { n: clientes }) }) : null,
+          el("div", { class: "tarjeta-precio__valor" },
+            el("p", { class: "tarjeta-precio__valor1", texto: valor1 }),
+            el("p", { class: "tarjeta-precio__valor2", texto: valor2 })),
           boton);
         const tarjeta = el("div", { class: "tarjeta-precio" + (p.preseleccionada ? " tarjeta-precio--destacada" : ""), "data-producto": p.id }, foto, cuerpo);
         tarjeta.addEventListener("click", function () { elegirOpcion(p.id, true); });
@@ -1606,7 +1626,7 @@
             el("span", { texto: marcada ? t.elegida : t.elegir }));
         });
         parrafoCosto.textContent = plantilla(t.costoPorResena, { r: miles(pr.r), costo: miles(Calculos.costoPorResena(p.precio, pr.r)) });
-        setCta({ texto: plantilla(t.boton, { opcion: p.nombre }), alHacerClic: pedir });
+        setCta({ texto: plantilla(t.boton, { opcion: p.nombre }), alHacerClic: pedir, confirmar: true });
         if (guardar) { vibrar(); guardarLead("opcion"); }
       }
       function pedir() {

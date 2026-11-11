@@ -97,19 +97,14 @@ const Calculos = {
     return e90;
   },
 
-  /** Precio dividido en 365 días, hacia arriba a la decena. */
-  precioPorDia(precio) {
-    return Calculos.techoDecena(precio / 365);
-  },
-
   /** Costo por reseña el primer año con la opción elegida. */
   costoPorResena(precio, r) {
     if (!r) return null;
     return Calculos.techoDecena(precio / (r * 12));
   },
 
-  /** Clientes nuevos que se necesitan para pagar la tarjeta. */
-  clientesParaPagar(precio, ticket) {
+  /** Cuántos clientes (del ticket del negocio) equivale el precio: techo(precio / ticket). null si no hay ticket. */
+  clientesEquivalentes(precio, ticket) {
     if (!ticket) return null;
     return Math.max(1, Math.ceil(precio / ticket));
   },
