@@ -33,6 +33,14 @@ const ESTRELLAS_MAXIMAS_PROYECTADAS = 4.9;
 // Meses que dura la proyección (90 días = 3 meses).
 const MESES_PROYECCION = 3;
 
+// ---- Puntaje del perfil (pantalla 8): 6 puntos que mira un cliente ----
+// La última reseña cuenta como "reciente" si tiene menos de estos días.
+const DIAS_RESENA_RECIENTE = 30;
+// "Más de 50 reseñas": se necesitan MÁS que esto.
+const MIN_RESENAS_BUENO = 50;
+// Fotos que entrega Google (máximo 10): con estas o más está bien; con menos pero alguna, es "mejorable".
+const MIN_FOTOS_BUENO = 5;
+
 const Calculos = {
   /** Redondea hacia arriba a la decena: 136,7 -> 140 */
   techoDecena(n) {
@@ -137,6 +145,7 @@ const Calculos = {
 
     return {
       yo: yo, puesto: puesto, total: total, top3: top3, yoEnTop3: yoEnTop3,
+      lista: conRitmo,
       competidores: competidores, rival: rival, ritmoYo: ritmoYo,
       hayCompetencia: competidores.length > 0
     };
@@ -153,7 +162,8 @@ const Calculos = {
     // Puesto proyectado: se ordena por reseñas a 90 días
     const proyectados = rank.competidores.map(function (c) { return c.total + MESES_PROYECCION * c.ritmo; });
     const p90 = 1 + proyectados.filter(function (v) { return v > n90; }).length;
-    const mejora = rank.puesto !== null && p90 < rank.puesto;
+    // Si hoy no aparece entre los primeros de la lista (fuera del top 20), mejora cuando entra a la lista
+    const mejora = rank.puesto !== null ? p90 < rank.puesto : (rank.hayCompetencia && p90 <= rank.total);
 
     const rival90 = rank.rival ? rank.rival.total + MESES_PROYECCION * rank.rival.ritmo : null;
     const actual90 = n0 + MESES_PROYECCION * rank.ritmoYo;
@@ -164,9 +174,53 @@ const Calculos = {
     };
   },
 
-  /** Puntos (día, reseñas) de una línea recta de 0 a 90 días. */
-  serieLineal(inicio, fin) {
-    return [{ d: 0, v: inicio }, { d: 90, v: fin }];
+  /**
+   * Los 6 puntos del perfil. Cada uno es "ok", "mejorable" o "falta".
+   * Devuelve { puntos: [{ id, estado }], puntaje } con puntaje = cuántos están "ok" (de 6).
+   */
+  puntajePerfil(n) {
+    const total = Number(n.userRatingCount) || 0;
+    const dias = Calculos.diasDesdeUltimaResena(n.reviews);
+    let recientes;
+    if (!total) recientes = "falta";
+    else if (dias !== null && dias <= DIAS_RESENA_RECIENTE) recientes = "ok";
+    else recientes = "mejorable";
+    const fotos = Number(n.nFotos) || 0;
+    const puntos = [
+      { id: "telefono", estado: n.telefono ? "ok" : "falta" },
+      { id: "horario", estado: n.tieneHorario ? "ok" : "falta" },
+      { id: "web", estado: n.sitioWeb ? "ok" : "falta" },
+      { id: "fotos", estado: fotos >= MIN_FOTOS_BUENO ? "ok" : (fotos > 0 ? "mejorable" : "falta") },
+      { id: "recientes", estado: recientes },
+      { id: "mas50", estado: total > MIN_RESENAS_BUENO ? "ok" : (total > 0 ? "mejorable" : "falta") }
+    ];
+    return { puntos: puntos, puntaje: puntos.filter(function (p) { return p.estado === "ok"; }).length };
+  },
+
+  /**
+   * Tabla de posiciones "Hoy" y "En 90 días": el top 3 y, si no está dentro, el negocio en su puesto.
+   * Cada fila: { id, nombre, total, puesto, esYo }. "sube" = cuántos puestos sube (0 si no mejora).
+   */
+  tablaPosiciones(negocio, rank, proy) {
+    const fila = function (c, puesto, total) {
+      return { id: c.id, nombre: c.nombre, total: total, puesto: puesto, esYo: !!c.esYo };
+    };
+    const yo = rank.yo;
+    // Hoy
+    const hoy = rank.top3.map(function (c) { return fila(c, c.puesto, c.total); });
+    if (!rank.yoEnTop3) hoy.push(fila(yo, rank.puesto !== null ? rank.puesto : null, yo.total));
+    // En 90 días: todos con sus reseñas proyectadas, ordenados de mayor a menor (el negocio gana los empates)
+    const rivales = rank.competidores.map(function (c) {
+      return { id: c.id, nombre: c.nombre, total: c.total + MESES_PROYECCION * c.ritmo };
+    });
+    rivales.sort(function (a, b) { return b.total - a.total; });
+    const orden = rivales.slice();
+    const p90 = proy.p90;
+    orden.splice(p90 - 1, 0, { id: yo.id, nombre: yo.nombre, total: proy.n90, esYo: true });
+    const d90 = orden.slice(0, 3).map(function (c, i) { return fila(c, i + 1, c.total); });
+    if (p90 > 3) d90.push(fila(orden[p90 - 1], p90, proy.n90));
+    const sube = (rank.puesto !== null && p90 < rank.puesto) ? rank.puesto - p90 : 0;
+    return { hoy: hoy, d90: d90, sube: sube, entra: rank.puesto === null, total: rank.total };
   },
 
   /** Saca la ciudad de una dirección de Google (Colombia). */

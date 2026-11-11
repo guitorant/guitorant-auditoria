@@ -3,9 +3,22 @@
    Todo es inventado. Solo se usa cuando MODO_DEMO = true.
    ============================================================ */
 
+// Foto inventada para probar el diseño con foto (un degradado con formas).
+const DEMO_FOTO = "data:image/svg+xml;utf8," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+  '<stop offset="0" stop-color="#C9A27A"/><stop offset="1" stop-color="#6F4E37"/></linearGradient></defs>' +
+  '<rect width="800" height="450" fill="url(#g)"/><circle cx="560" cy="170" r="120" fill="#F3E3D0" opacity=".85"/>' +
+  '<rect x="120" y="260" width="360" height="22" rx="11" fill="#F3E3D0" opacity=".6"/>' +
+  '<rect x="120" y="305" width="240" height="22" rx="11" fill="#F3E3D0" opacity=".4"/></svg>');
+
 const DEMO_NEGOCIOS = [
   {
     id: "demo-cafe-ejemplo",
+    telefono: "+57 604 555 0101",
+    sitioWeb: "",
+    tieneHorario: true,
+    abierto: true,
+    nFotos: 3,
     displayName: "Café Ejemplo",
     formattedAddress: "Calle 10 #5-20, Medellín, Antioquia, Colombia",
     primaryType: "cafe",
@@ -27,14 +40,19 @@ const DEMO_NEGOCIOS = [
   {
     // Para probar el camino "sin reseñas malas"
     id: "demo-cafe-premium",
+    telefono: "+57 604 555 0102",
+    sitioWeb: "https://cafeejemplo.example",
+    tieneHorario: true,
+    abierto: true,
+    nFotos: 10,
     displayName: "Café Ejemplo Premium",
     formattedAddress: "Carrera 43A #7-50, Medellín, Antioquia, Colombia",
     primaryType: "cafe",
     primaryTypeDisplayName: "Cafetería",
     rating: 4.8,
     userRatingCount: 210,
-    priceRange: "",
-    photoUrl: "",
+    priceRange: "$$",
+    photoUrl: DEMO_FOTO,
     googleMapsURI: "https://maps.google.com/?q=Cafe+Ejemplo+Premium",
     posicionLista: 3,
     reviews: [
@@ -46,6 +64,11 @@ const DEMO_NEGOCIOS = [
   {
     // Para probar el caso "hace meses nadie deja una reseña"
     id: "demo-cafe-quieto",
+    telefono: "+57 604 555 0103",
+    sitioWeb: "",
+    tieneHorario: true,
+    abierto: false,
+    nFotos: 2,
     displayName: "Café Quieto Ejemplo",
     formattedAddress: "Calle 50 #30-15, Medellín, Antioquia, Colombia",
     primaryType: "cafe",
@@ -65,14 +88,19 @@ const DEMO_NEGOCIOS = [
   {
     // Para probar el caso "te están alcanzando" (buen perfil, sin reseñas malas ni viejas)
     id: "demo-cafe-estrella",
+    telefono: "+57 604 555 0104",
+    sitioWeb: "https://instagram.com/cafeestrella",
+    tieneHorario: true,
+    abierto: true,
+    nFotos: 8,
     displayName: "Café Estrella Ejemplo",
     formattedAddress: "Carrera 70 #44-10, Medellín, Antioquia, Colombia",
     primaryType: "cafe",
     primaryTypeDisplayName: "Cafetería",
     rating: 4.7,
     userRatingCount: 600,
-    priceRange: "",
-    photoUrl: "",
+    priceRange: "$$",
+    photoUrl: DEMO_FOTO,
     googleMapsURI: "https://maps.google.com/?q=Cafe+Estrella+Ejemplo",
     posicionLista: 2,
     reviews: [
@@ -83,6 +111,11 @@ const DEMO_NEGOCIOS = [
   {
     // Para probar el camino "negocio sin reseñas ni calificación"
     id: "demo-cafe-nuevo",
+    telefono: "",
+    sitioWeb: "",
+    tieneHorario: false,
+    abierto: null,
+    nFotos: 0,
     displayName: "Café Nuevo Ejemplo",
     formattedAddress: "Calle 33 #70-12, Medellín, Antioquia, Colombia",
     primaryType: "cafe",

@@ -9,15 +9,20 @@
    - Emojis: solo en las opciones de respuesta y al inicio de las reacciones (uno por elemento).
    ============================================================ */
 
+// ---------- Tema de Navidad ----------
+// true  = nieve, gorro de Papá Noel, barra de caramelo y etiqueta "Edición Navidad".
+// false = todo eso desaparece y la barra de progreso vuelve a ser verde.
+const TEMA_NAVIDAD = true;
+// Hasta qué día se muestra la franja "Pide hoy y recíbela antes de Navidad" en la pantalla de precios.
+// Formato AAAA-MM-DD (ejemplo: "2026-12-15"). Si está vacío o ya pasó, no se muestra.
+const FECHA_LIMITE_NAVIDAD = "[PENDIENTE]";
+
 // ---------- Imágenes (deja "" si no tienes la imagen) ----------
 const IMAGENES = {
   // Personaje guía. Cuando tengas la imagen: "assets/personaje/guia.png"
   // Si está vacío, se muestra un círculo verde con la letra G.
-  guia: "",
-  // Fotos de las tarjetas. Móvil y Dúo no tienen foto todavía: se muestra una tarjeta genérica dibujada.
-  tarjetaMovil: "",
-  tarjetaPro: "assets/producto/tarjeta-pro.jpg",
-  duo: ""
+  guia: ""
+  // El logo de Guitorant está en assets/marca/logo-guitorant.webp (se usa en index.html y politica.html).
 };
 
 // ---------- Enlaces y contacto ----------
@@ -82,6 +87,7 @@ const TIPOS_GENERICOS = [
 // ---------- Textos de las pantallas ----------
 const TEXTOS = {
   bienvenida: {
+    etiquetaNavidad: "Edición Navidad 🎄",
     titulo: "En 3 minutos sabrás cómo está tu negocio en Google frente a tu competencia.",
     texto: "Y cuántos clientes se están yendo a tu competencia sin que lo sepas.",
     micro: "Gratis · Sin registrarte · Resultado al instante",
@@ -164,19 +170,39 @@ const TEXTOS = {
     mensajeNegocio: " {valor}",
     mensajeCiudad: " Estoy en {valor}.",
     mensajeSoloServicio: "solo el servicio",
-    mensajeTarjeta: "la {nombre}"
+    mensajeTarjeta: "la {nombre} en color {color}"
   },
 
   eresTu: {
+    etiqueta: "Encontramos este negocio en Google",
     titulo: "¿Eres tú?",
     boton: "Sí, es mi negocio",
-    otro: "No es este, buscar de nuevo"
+    otro: "No es este, buscar de nuevo",
+    resenasUna: "1 reseña",
+    resenasVarias: "{n} reseñas"
   },
   perfil: {
-    titulo: "Así te ven hoy en Google.",
+    titulo: "Así te ven tus clientes cuando te buscan en Google.",
     boton: "Ver lo que leen tus clientes",
     sinCalificacion: "Aún sin calificación",
-    sinResenas: "Sin reseñas todavía"
+    sinResenas: "Sin reseñas todavía",
+    abierto: "Abierto ahora",
+    cerrado: "Cerrado",
+    sinTelefono: "Sin teléfono publicado",
+    sinWeb: "Sin sitio web",
+    sinHorario: "Sin horario publicado",
+    puntaje: "Tu perfil: {x} de 6",
+    listaTitulo: "Lo que mira un cliente antes de elegirte",
+    falta: "Falta",
+    mejorable: "Mejorable",
+    puntos: [
+      { id: "telefono", texto: "Teléfono visible" },
+      { id: "horario", texto: "Horario publicado" },
+      { id: "web", texto: "Sitio web o red social" },
+      { id: "fotos", texto: "Fotos del negocio" },
+      { id: "recientes", texto: "Reseñas recientes (la última en los últimos 30 días)" },
+      { id: "mas50", texto: "Más de 50 reseñas" }
+    ]
   },
   resenas: {
     // a) hay reseñas de 3 estrellas o menos
@@ -229,42 +255,45 @@ const TEXTOS = {
   },
   porque: {
     etiqueta: "LA REGLA DE GOOGLE",
-    titulo: "Google pone arriba a quienes reciben reseñas nuevas cada mes.",
-    barraRival: "#{p} {nombre}: ~{x} al mes",
-    barraTu: "Tú: ~{y} al mes",
+    titulo: "Google pone arriba a quien recibe reseñas nuevas cada mes.",
+    rival: "#{p} {nombre}",
+    tu: "Tú",
+    unidad: "reseñas nuevas al mes",
+    unidadUna: "reseña nueva al mes",
+    veces: "{n} veces más",
+    casiNinguna: "Él recibe {x} y tú casi ninguna",
+    parejo: "Van a un ritmo parecido. Mantenerlo es lo que te sostiene arriba.",
+    pasos: ["Más reseñas nuevas", "Sube en Google", "Llegan más clientes"],
     texto: "Para alcanzarlos no necesitas más pauta. Necesitas que tus clientes de hoy dejen su reseña.",
     boton: "Ver cómo alcanzarlos"
   },
   ritmo: {
-    titulo: "Con la Tarjeta Toque, tus clientes dejan la reseña en segundos.",
+    titulo: "Así podría cambiar tu posición con la Tarjeta Toque.",
     // {c} = clientes al día, {r} = reseñas nuevas al mes con la tarjeta
-    texto: "Atiendes unos {c} clientes al día. Si solo 1 de cada 20 deja su reseña, sumarías unas {r} reseñas al mes.",
+    texto: "Atiendes unos {c} clientes al día. Si solo 1 de cada 20 deja su reseña, sumas unas {r} al mes.",
     estimacion: "Estimación",
-    leyendaActual: "Tu ritmo actual",
-    leyendaTarjeta: "Con la tarjeta",
-    leyendaRival: "El #1",
-    hoy: "Hoy",
-    dia90: "Día 90",
-    resumen: "En 90 días: {n0} → {n90} reseñas · {e0} → {e90} estrellas",
-    resumenSinCalificacion: "En 90 días: {n0} → {n90} reseñas · {e90} estrellas",
-    mejora: "Podrías pasar del #{p} al #{p90} de tu zona.",
+    pestanaHoy: "Hoy",
+    pestana90: "En 90 días",
+    tabla: "Tabla de posiciones de tu zona",
+    columnas: { puesto: "Puesto", negocio: "Negocio", resenas: "Reseñas" },
+    subes: "Subes {n} puestos",
+    subesUno: "Subes 1 puesto",
+    entras: "Entras al top {n}",
+    resenasDato: "reseñas",
     boton: "Ver mi tarjeta"
   },
   tarjeta: {
     titulo: "Esta es la Tarjeta Toque Pro.",
     texto: "Va en tu mostrador o en la mesa, con su propio soporte. Tus clientes la ven, acercan el celular y te dejan su reseña.",
     alt: "Tarjeta Toque Pro con su soporte",
-    // Texto de la tarjeta genérica dibujada (Móvil y Dúo)
-    califica: "Califícanos en Google",
-    acerca: "Acerca tu celular",
     boton: "¿Cómo funciona?"
   },
   como: {
     titulo: "Así de fácil.",
     pasos: [
-      "Tu cliente acerca su celular a la tarjeta.",
-      "Se abre tu perfil de Google listo para calificar. Sin apps y sin escanear.",
-      "Sumas reseñas todos los días y subes en el ranking."
+      { emoji: "📱", texto: "Tu cliente acerca su celular a la tarjeta." },
+      { emoji: "⭐", texto: "Se abre tu perfil de Google listo para calificar. Sin apps y sin escanear." },
+      { emoji: "📈", texto: "Sumas reseñas todos los días y subes en el ranking." }
     ],
     boton: "Quiero mi tarjeta"
   },
@@ -283,11 +312,15 @@ const TEXTOS = {
   },
   precios: {
     titulo: "Elige tu tarjeta, {negocio}",
+    navidad: "🎁 Pide hoy y recíbela antes de Navidad",
     franja: "Pago único. Sin mensualidades.",
     // {r} = reseñas al mes, {costo} = costo por reseña
     costoPorResena: "Con ~{r} reseñas al mes, cada reseña te costaría menos de ${costo} el primer año.",
     menosPorDia: "Menos de ${d} al día durante un año",
     sePaga: { uno: "Se paga con 1 cliente nuevo", varios: "Se paga con {n} clientes nuevos" },
+    colorEtiqueta: "Color",
+    elegir: "Elegir",
+    elegida: "Elegida",
     incluidoTitulo: "Incluido en todas",
     valor: "valor ${v}",
     boton: "Pedir mi {opcion} por WhatsApp"
@@ -297,6 +330,7 @@ const TEXTOS = {
     resumen: "Resumen de tu pedido",
     negocio: "Negocio",
     tarjeta: "Tarjeta",
+    color: "Color",
     precio: "Precio",
     ciudad: "Ciudad",
     servicio: "Servicio",
@@ -304,7 +338,7 @@ const TEXTOS = {
     boton: "Abrir WhatsApp otra vez"
   },
   // {resumen} se completa solo
-  mensajePedido: "Hola Guitorant, soy {nombre}. Hice la auditoría de {negocio} ({enlace}). Quiero la {opcion} por ${precio}. Estoy en {ciudad}.",
+  mensajePedido: "Hola Guitorant, soy {nombre}. Hice la auditoría de {negocio} ({enlace}). Quiero la {opcion} en color {color} por ${precio}. Estoy en {ciudad}.",
   demanda: {
     titulo: "Estamos con mucha demanda.",
     texto: "Escríbenos y te hacemos la auditoría por WhatsApp.",
@@ -370,6 +404,22 @@ const REACCION_MS_POR_PALABRA = 250;
 const REACCION_ESCRIBIENDO_MS = 600;
 
 // ---------- Productos y precios (en pesos) ----------
+// Fotos: assets/producto/<archivo>-900.webp y <archivo>-1800.webp (formato 4:5, producto al 78% del alto).
+// "fondo" es el color real del borde de cada foto. Al principio viene marcado el color COLOR_INICIAL.
+const COLORES_PRO = [
+  { id: "blanco", nombre: "Blanca", css: "#FFFFFF", archivo: "pro-blanca", fondo: "#121212" },
+  { id: "negro", nombre: "Negra", css: "#111111", archivo: "pro-negra", fondo: "#141414" }
+];
+const COLORES_MOVIL = [
+  { id: "blanco", nombre: "Blanca", css: "#FFFFFF", archivo: "movil-blanca", fondo: "#0a0a0a" },
+  { id: "negro", nombre: "Negra", css: "#111111", archivo: "movil-negra", fondo: "#0e0e0e" }
+];
+const COLORES_DUO = [
+  { id: "blanco", nombre: "Blanco", css: "#FFFFFF", archivo: "duo-blanco", fondo: "#151515" },
+  { id: "negro", nombre: "Negro", css: "#111111", archivo: "duo-negro", fondo: "#161616" }
+];
+const COLOR_INICIAL = "negro";
+
 const PRODUCTOS = [
   {
     id: "movil",
@@ -378,7 +428,7 @@ const PRODUCTOS = [
     precioAntes: null,
     etiqueta: "",
     descripcion: "Del tamaño de una tarjeta de crédito. Tu mesero o vendedor la lleva encima y la acerca al cliente justo cuando termina de atenderlo.",
-    imagen: "tarjetaMovil"
+    colores: COLORES_MOVIL
   },
   {
     id: "pro",
@@ -387,16 +437,16 @@ const PRODUCTOS = [
     precioAntes: null,
     etiqueta: "",
     descripcion: "Tipo hablador, con soporte propio. Va en el mostrador o en la mesa, a la vista de todos, pidiendo reseñas sin que nadie tenga que hacerlo.",
-    imagen: "tarjetaPro"
+    colores: COLORES_PRO
   },
   {
     id: "duo",
     nombre: "Dúo Pro + Móvil",
     precio: 99900,
     precioAntes: 119800,
-    etiqueta: "MEJOR VALOR · Ahorras $19.900",
+    etiqueta: "Mejor valor · Ahorras $19.900",
     descripcion: "La Pro fija donde pagan y la Móvil en manos de tu equipo. Cubres a cada cliente: el que pasa por caja y el que atiendes en la mesa.",
-    imagen: "duo",
+    colores: COLORES_DUO,
     preseleccionada: true
   }
 ];

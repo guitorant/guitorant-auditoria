@@ -1,7 +1,7 @@
 /* ============================================================
    GOOGLE — todo lo que habla con Google (o con la demo).
    Una auditoría completa = 1 autocompletado (sesión) + 1 detalle
-   + 1 foto + 1 búsqueda de cercanos. Nada más.
+   (con teléfono, web, horario y fotos incluidos) + 1 foto + 1 búsqueda de cercanos. Nada más.
    ============================================================ */
 
 const GoogleAPI = (function () {
@@ -77,6 +77,26 @@ const GoogleAPI = (function () {
     }
     return tipo;
   }
+  /** ¿Está abierto ahora? Calculado con el horario que ya trajo el detalle (sin otra llamada). null si no se sabe. */
+  function abiertoAhora(horario, desfaseMin) {
+    try {
+      const periodos = horario && horario.periods;
+      if (!periodos || !periodos.length) return null;
+      const desfase = typeof desfaseMin === "number" ? desfaseMin : -300; // Colombia: UTC-5
+      const local = new Date(Date.now() + desfase * 60000);
+      const ahora = local.getUTCDay() * 1440 + local.getUTCHours() * 60 + local.getUTCMinutes();
+      const SEMANA = 10080;
+      for (let i = 0; i < periodos.length; i++) {
+        const p = periodos[i];
+        if (!p.open) continue;
+        const a = p.open.day * 1440 + (p.open.hour || 0) * 60 + (p.open.minute || 0);
+        let b = p.close ? p.close.day * 1440 + (p.close.hour || 0) * 60 + (p.close.minute || 0) : a + SEMANA;
+        if (b <= a) b += SEMANA;
+        if ((ahora >= a && ahora < b) || (ahora + SEMANA >= a && ahora + SEMANA < b)) return true;
+      }
+      return false;
+    } catch (e) { return null; }
+  }
   function textoDe(x) {
     if (!x) return "";
     if (typeof x === "string") return x;
@@ -105,6 +125,8 @@ const GoogleAPI = (function () {
           tipoComparacion: n.primaryType,
           rating: n.rating, userRatingCount: n.userRatingCount,
           priceRange: n.priceRange, photoUrl: n.photoUrl, googleMapsURI: n.googleMapsURI,
+          telefono: n.telefono || "", sitioWeb: n.sitioWeb || "", tieneHorario: !!n.tieneHorario,
+          abierto: n.abierto === undefined ? null : n.abierto, nFotos: n.nFotos || 0,
           reviews: n.reviews.map(function (r, i) {
             const dias = (typeof n.diasUltimaResena === "number" ? n.diasUltimaResena : 14) + i * 9;
             return { rating: r.rating, autor: r.autor, fecha: r.fecha, texto: r.texto,
@@ -161,7 +183,8 @@ const GoogleAPI = (function () {
         return place.fetchFields({
           fields: ["id", "displayName", "formattedAddress", "location", "primaryType", "types",
             "primaryTypeDisplayName", "rating", "userRatingCount", "reviews",
-            "priceRange", "priceLevel", "photos", "googleMapsURI"]
+            "priceRange", "priceLevel", "photos", "googleMapsURI",
+            "nationalPhoneNumber", "websiteURI", "regularOpeningHours", "currentOpeningHours", "utcOffsetMinutes"]
         }).then(function () {
           sesion = null; // la sesión de autocompletado termina con el detalle
           let foto = "";
@@ -177,6 +200,9 @@ const GoogleAPI = (function () {
               publishTime: r.publishTime || null
             };
           });
+          const horario = place.regularOpeningHours || place.currentOpeningHours || null;
+          const tieneHorario = !!(horario && ((horario.periods && horario.periods.length) ||
+            (horario.weekdayDescriptions && horario.weekdayDescriptions.length)));
           return {
             id: place.id,
             displayName: textoDe(place.displayName),
@@ -190,6 +216,11 @@ const GoogleAPI = (function () {
             priceRange: textoPrecio(place),
             photoUrl: foto,
             googleMapsURI: place.googleMapsURI || "",
+            telefono: place.nationalPhoneNumber || "",
+            sitioWeb: place.websiteURI || "",
+            tieneHorario: tieneHorario,
+            abierto: tieneHorario ? abiertoAhora(horario, place.utcOffsetMinutes) : null,
+            nFotos: (place.photos && place.photos.length) || 0,
             reviews: reviews
           };
         });

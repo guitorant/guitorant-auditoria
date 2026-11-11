@@ -44,6 +44,8 @@ Todo está en **`js/datos.js`**. Ábrelo con cualquier editor y cambia lo que es
 - Nombres amigables de los tipos de negocio ("restaurantes", "peluquerías"…): `CATEGORIAS`.
 - Duración de las reacciones del personaje: `REACCION_MIN_MS`, `REACCION_MAX_MS`, `REACCION_MS_POR_PALABRA`.
 - Imágenes: `IMAGENES`. Cuando tengas el personaje guía, ponle `"assets/personaje/guia.png"`.
+- Navidad: `TEMA_NAVIDAD = true` activa nieve, gorro de Papá Noel, barra de caramelo y la etiqueta "Edición Navidad"; con `false` desaparece todo y la barra vuelve a ser verde. `FECHA_LIMITE_NAVIDAD` (formato `"2026-12-15"`) controla hasta cuándo sale la franja "Pide hoy y recíbela antes de Navidad" en la pantalla de precios; mientras diga `[PENDIENTE]` no se muestra.
+- Fotos y colores de las tarjetas: `COLORES_PRO`, `COLORES_MOVIL`, `COLORES_DUO` y `COLOR_INICIAL`. Las fotos están en `assets/producto/` (4:5, WebP de 900 y 1800 px).
 
 Los **colores** están al inicio de `css/estilos.css` (sección `:root`).
 
@@ -89,7 +91,7 @@ La competencia es siempre **del mismo tipo de negocio** (filtro por tipo princip
 
 Prueba: abre la URL en el navegador; debe decir que el script está funcionando. Después haz una auditoría de prueba hasta el formulario de contacto: aparecerá una pestaña `Leads` con la fila. El mismo lead se actualiza (no se duplica) cuando elige tarjeta y cuando toca WhatsApp.
 
-La página también envía dos datos nuevos, `ruta` (`con_perfil` o `sin_perfil`) y `servicio` (`crear`, `reclamar` u `optimizar`). Para que se guarden, agrega esas dos columnas en `COLUMNAS` de `apps-script/Code.gs` y vuelve a implementar. Mientras tanto, en la ruta "sin perfil" el servicio queda escrito en la columna `opcion_elegida` (ej: "Crear perfil + Tarjeta Toque Pro").
+La página también envía dos datos nuevos, `ruta` (`con_perfil` o `sin_perfil`) y `servicio` (`crear`, `reclamar` u `optimizar`). Para que se guarden, agrega esas dos columnas en `COLUMNAS` de `apps-script/Code.gs` y vuelve a implementar. Lo mismo pasa con `puntaje_perfil` (el puntaje de 0 a 6 de la pantalla 8) y `color` (el color de la tarjeta elegida): agrégalas a `COLUMNAS` para que se guarden. Mientras tanto, en la ruta "sin perfil" el servicio queda escrito en la columna `opcion_elegida` (ej: "Crear perfil + Tarjeta Toque Pro").
 
 Si cambias `Code.gs` más adelante, debes hacer **Implementar → Administrar implementaciones → editar → Nueva versión**.
 
@@ -124,12 +126,14 @@ Si cambias `Code.gs` más adelante, debes hacer **Implementar → Administrar im
 | `js/config.js` | Tus claves y ajustes (Google, WhatsApp, Sheets, Meta, modo demo). |
 | `js/datos.js` | Todos los textos, opciones, reacciones, precios. |
 | `js/calculos.js` | Las fórmulas (ritmo de reseñas, proyección a 90 días, precios por día). |
+| `js/nieve.js` | La nieve de Navidad (canvas). |
 | `js/google.js` | Habla con Google (autocompletado, detalle del negocio, competencia). |
 | `js/demo.js` | Negocios y competidores inventados para probar. |
 | `js/app.js` | Navegación, barra de progreso, pantallas, envío de leads, píxel. |
 | `politica.html` | Política de tratamiento de datos (Ley 1581 de 2012). Se abre desde la casilla de autorización. |
 | `apps-script/Code.gs` | Script que guarda los leads en Google Sheets. |
-| `assets/producto/` | Fotos de las tarjetas (hoy: `tarjeta-pro.jpg`). |
+| `assets/producto/` | Fotos de las tarjetas (Pro, Móvil y Dúo, en blanco y negro). |
+| `assets/marca/` | Logo de Guitorant. |
 | `assets/personaje/` | Aquí va la imagen del personaje guía (`guia.png`). |
 | `CNAME` | Le dice a GitHub Pages el dominio `auditoria.guitorant.com`. |
 | `.gitignore` | Lista de carpetas que Git no sube. |

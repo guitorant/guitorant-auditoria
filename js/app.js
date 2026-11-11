@@ -36,6 +36,9 @@
     autorizacionFecha: "",
     opcionId: null,        // tarjeta elegida (ruta con perfil)
     opcionSpId: "pro",     // tarjeta elegida (ruta sin perfil): movil | pro | duo | solo
+    colores: {},           // color elegido por tarjeta: { movil: "negro", pro: "negro", duo: "negro" }
+    puntajePerfil: null,   // puntaje de la pantalla 8 (sobre 6)
+    rafagaHecha: false,    // la nieve extra de la pantalla final cae una sola vez
     tocoWhatsapp: false,
     utm: leerUtm()
   };
@@ -195,6 +198,11 @@
     flecha: function (c) { return svg('<path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>', c); },
     lupa: function (c) { return svg('<circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>', c); },
     ondas: function (c) { return svg('<path d="M8 6.5a8 8 0 010 11M12 3.5a12.5 12.5 0 010 17M16 0.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="12" r="1.8" fill="currentColor"/>', c); },
+    pin: function (c) { return svg('<path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0113 0c0 4.9-6.5 11-6.5 11z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.4" fill="currentColor"/>', c); },
+    telefono: function (c) { return svg('<path d="M6.6 3.5h2.7l1.4 3.8-1.8 1.3a11 11 0 005.5 5.5l1.3-1.8 3.8 1.4v2.7a2 2 0 01-2.2 2A15.5 15.5 0 014.6 5.7a2 2 0 012-2.2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>', c); },
+    web: function (c) { return svg('<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.8 12h16.4M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5z" fill="none" stroke="currentColor" stroke-width="1.6"/>', c); },
+    reloj: function (c) { return svg('<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>', c); },
+    flechaFina: function (c) { return svg('<path d="M4 12h15M14 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>', c); },
     checkGrande: function () {
       return svg('<circle cx="48" cy="48" r="44" pathLength="1"/><path d="M29 49l13 13 26-27" pathLength="1"/>', "check-grande", "0 0 96 96");
     }
@@ -229,26 +237,108 @@
     return el.apply(null, ["div", { class: "calif" }].concat(hijos));
   }
 
-  /* ---------- Personaje guía ---------- */
+  /* ---------- Personaje guía (con gorro de Papá Noel en Navidad) ---------- */
+  const GORRO_SVG = '<path d="M7 38C9 15 27 5 44 9c9 2 15 11 17 26z" fill="#C62828"/>' +
+    '<rect x="2" y="32" width="64" height="13" rx="6.5" fill="#FFFFFF" stroke="#CBD3DD" stroke-width="1.2"/>' +
+    '<circle cx="59" cy="11" r="7.5" fill="#FFFFFF" stroke="#CBD3DD" stroke-width="1.2"/>';
   function crearGuia(chica) {
     const caja = el("div", { class: "guia" + (chica ? " guia--chica" : ""), "aria-hidden": "true" });
-    function letra() { caja.textContent = "G"; }
+    const circulo = el("div", { class: "guia__circulo" });
+    function letra() { circulo.textContent = "G"; }
     if (IMAGENES.guia) {
       const img = el("img", { src: IMAGENES.guia, alt: "" });
       img.addEventListener("error", letra);
-      caja.appendChild(img);
+      circulo.appendChild(img);
     } else {
       letra();
     }
+    caja.appendChild(circulo);
+    if (TEMA_NAVIDAD) caja.appendChild(svg(GORRO_SVG, "guia__gorro", "0 0 68 48"));
     return caja;
   }
 
-  /* ---------- Tarjeta genérica dibujada (sin nombre del negocio) ---------- */
-  function crearTarjetaNfc() {
-    return el("div", { class: "nfc", role: "img", "aria-label": TEXTOS.tarjeta.califica },
-      el("div", { class: "nfc__titulo", texto: TEXTOS.tarjeta.califica }),
-      el("div", { class: "nfc__pie" }, ICONO.ondas("nfc__ondas"), el("span", { texto: TEXTOS.tarjeta.acerca }))
-    );
+  /** La franja de Navidad de la pantalla de precios solo sale hasta FECHA_LIMITE_NAVIDAD (AAAA-MM-DD). */
+  function navidadVigente() {
+    if (!TEMA_NAVIDAD) return false;
+    const f = String(FECHA_LIMITE_NAVIDAD || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return false;
+    const h = new Date();
+    const dos = function (n) { return (n < 10 ? "0" : "") + n; };
+    return (h.getFullYear() + "-" + dos(h.getMonth() + 1) + "-" + dos(h.getDate())) <= f;
+  }
+
+  /* ---------- Fotos de producto y selector de color ---------- */
+  function colorDe(p) {
+    const id = estado.colores[p.id] || COLOR_INICIAL;
+    return p.colores.filter(function (c) { return c.id === id; })[0] || p.colores[0];
+  }
+  function nombreColor(p) { return p ? colorDe(p).nombre : ""; }
+  function crearImgColor(p, color, op) {
+    const base = "assets/producto/" + color.archivo;
+    const img = el("img", {
+      class: "foto-prod__img", src: base + "-900.webp",
+      srcset: base + "-900.webp 900w, " + base + "-1800.webp 1800w", sizes: op.sizes,
+      width: "900", height: "1125", alt: p.nombre + " " + color.nombre.toLowerCase(), decoding: "async"
+    });
+    if (op.lazy) img.setAttribute("loading", "lazy");
+    return img;
+  }
+  /** Foto 4:5 con el mismo negro del borde de la imagen como fondo. */
+  function fotoProducto(p, color, op) {
+    const caja = el("div", { class: "foto-prod" + (op.clase ? " " + op.clase : "") });
+    caja.style.backgroundColor = color.fondo;
+    caja.appendChild(crearImgColor(p, color, op));
+    return caja;
+  }
+  /** Cambia la foto con un fundido de 200 ms. */
+  function cambiarFoto(caja, p, color, op) {
+    caja.style.backgroundColor = color.fondo;
+    const viejas = Array.prototype.slice.call(caja.querySelectorAll("img"));
+    const nueva = crearImgColor(p, color, { sizes: op.sizes, lazy: false });
+    nueva.classList.add("foto-prod__img--entra");
+    let hecho = false;
+    function mostrarNueva() {
+      if (hecho) return;
+      hecho = true;
+      requestAnimationFrame(function () { nueva.classList.add("visible"); });
+      setTimeout(function () {
+        viejas.forEach(function (v) { v.remove(); });
+        nueva.classList.remove("foto-prod__img--entra", "visible");
+      }, 240);
+    }
+    nueva.addEventListener("load", mostrarNueva);
+    nueva.addEventListener("error", mostrarNueva);
+    caja.appendChild(nueva);
+  }
+  /** Dos circulitos (blanco y negro) con el nombre del color elegido. */
+  function selectorColor(p, alCambiar) {
+    const caja = el("div", { class: "colores", role: "radiogroup", "aria-label": TEXTOS.precios.colorEtiqueta });
+    const nombre = el("span", { class: "colores__nombre" });
+    const botones = {};
+    function marcar() {
+      const actual = colorDe(p);
+      p.colores.forEach(function (c) { botones[c.id].setAttribute("aria-checked", c.id === actual.id ? "true" : "false"); });
+      nombre.textContent = actual.nombre;
+    }
+    p.colores.forEach(function (c) {
+      const punto = el("span", { class: "color-op__punto" });
+      punto.style.background = c.css;
+      const b = el("button", {
+        class: "color-op", type: "button", role: "radio", "aria-checked": "false",
+        "aria-label": TEXTOS.precios.colorEtiqueta + " " + c.nombre
+      }, punto);
+      b.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        estado.colores[p.id] = c.id;
+        marcar();
+        alCambiar(c);
+      });
+      botones[c.id] = b;
+      caja.appendChild(b);
+    });
+    caja.appendChild(nombre);
+    marcar();
+    return caja;
   }
 
   /* ---------- Botón principal fijo ---------- */
@@ -315,6 +405,7 @@
     estado.actualPantalla = id;
     if (id === "busqueda") estado.ruta = null; // al volver al buscador se deja la ruta "sin perfil"
     const cont = el("section", { class: "pantalla", "data-pantalla": id });
+    $app.classList.toggle("app--ancha", !!def.ancha);
     $app.replaceChildren(cont);
     window.scrollTo(0, 0);
     setCta(null);
@@ -327,6 +418,7 @@
       return;
     }
     iniciarAnimaciones(cont);
+    Nieve.zona();
     medirPantalla(id, i);
   }
 
@@ -469,7 +561,9 @@
       ticket: ticketActual() || "",
       como_pide_resenas: opcionComo ? opcionComo.texto : "",
       ritmo_estimado: (!sin && estado.rank) ? estado.rank.ritmoYo : "",
+      puntaje_perfil: (!sin && estado.puntajePerfil !== null) ? estado.puntajePerfil : "",
       opcion_elegida: opcion,
+      color: p ? nombreColor(p) : "",
       precio: precio,
       toco_whatsapp: estado.tocoWhatsapp ? "SI" : "",
       utm_source: estado.utm.utm_source,
@@ -545,6 +639,7 @@
       const t = TEXTOS.bienvenida;
       c.classList.add("bienvenida");
       c.appendChild(crearGuia(false));
+      if (TEMA_NAVIDAD) c.appendChild(el("span", { class: "etiqueta-navidad", texto: t.etiquetaNavidad }));
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
       c.appendChild(el("p", { class: "texto", texto: t.texto }));
       c.appendChild(el("p", { class: "pequeno", texto: t.micro }));
@@ -815,25 +910,42 @@
         el("p", { class: "plan-servicio__precio", texto: precio || t.precioPendiente })));
       c.appendChild(el("p", { class: "plan-agregar", texto: t.agregar }));
 
-      const caja = el("div", { class: "productos", role: "group", "aria-label": t.agregar, style: "margin-top:14px;gap:12px" });
-      const botones = {};
-      function tarjetaOpcion(id, nombre, linea2) {
-        const b = el("button", { class: "producto producto--compacto", type: "button", "aria-pressed": "false" },
-          el("div", { class: "producto__fila" }, el("span", { class: "producto__radio" }),
-            el("div", { class: "producto__info" },
-              el("p", { class: "producto__nombre", texto: nombre }),
-              el("p", { class: "producto__linea" + (id === "solo" ? " producto__linea--suave" : ""), texto: linea2 }))));
-        b.addEventListener("click", function () { elegir(id, true); });
-        botones[id] = b;
-        caja.appendChild(b);
-      }
-      PRODUCTOS.forEach(function (p) { tarjetaOpcion(p.id, p.nombre, "+ $" + miles(p.precio)); });
-      tarjetaOpcion("solo", t.soloServicio, t.soloServicioDesc);
+      const caja = el("div", { class: "opciones-sp", role: "group", "aria-label": t.agregar });
+      const filas = {};
+      PRODUCTOS.forEach(function (p) {
+        const color = colorDe(p);
+        const op = { sizes: "64px", lazy: false };
+        const foto = fotoProducto(p, color, { clase: "foto-prod--mini", sizes: op.sizes });
+        const sel = el("button", { class: "opcion-sp__sel", type: "button", "aria-pressed": "false" },
+          el("span", { class: "radio" }),
+          foto,
+          el("span", { class: "opcion-sp__info" },
+            el("span", { class: "opcion-sp__nombre", texto: p.nombre }),
+            el("span", { class: "opcion-sp__linea", texto: "+ $" + miles(p.precio) })));
+        sel.addEventListener("click", function () { elegir(p.id, true); });
+        const fila = el("div", { class: "opcion-sp" }, sel,
+          selectorColor(p, function (col) { cambiarFoto(foto, p, col, op); elegir(p.id, true); }));
+        filas[p.id] = { fila: fila, sel: sel };
+        caja.appendChild(fila);
+      });
+      const solo = el("button", { class: "opcion-sp__sel", type: "button", "aria-pressed": "false" },
+        el("span", { class: "radio" }),
+        el("span", { class: "opcion-sp__info" },
+          el("span", { class: "opcion-sp__nombre", texto: t.soloServicio }),
+          el("span", { class: "opcion-sp__linea opcion-sp__linea--suave", texto: t.soloServicioDesc })));
+      solo.addEventListener("click", function () { elegir("solo", true); });
+      const filaSolo = el("div", { class: "opcion-sp" }, solo);
+      filas.solo = { fila: filaSolo, sel: solo };
+      caja.appendChild(filaSolo);
       c.appendChild(caja);
 
       function elegir(id, guardar) {
         estado.opcionSpId = id;
-        Object.keys(botones).forEach(function (k) { botones[k].setAttribute("aria-pressed", k === id ? "true" : "false"); });
+        Object.keys(filas).forEach(function (k) {
+          const marcada = k === id;
+          filas[k].sel.setAttribute("aria-pressed", marcada ? "true" : "false");
+          filas[k].fila.classList.toggle("opcion-sp--elegida", marcada);
+        });
         if (guardar) { vibrar(); guardarLead("opcion"); }
       }
       function pedir() {
@@ -857,7 +969,7 @@
       nombre: estado.contacto.nombre,
       negocio: neg ? plantilla(t.mensajeNegocio, { valor: neg }) : "",
       servicio: srv.frase,
-      tarjeta: p ? plantilla(t.mensajeTarjeta, { nombre: p.nombre }) : t.mensajeSoloServicio,
+      tarjeta: p ? plantilla(t.mensajeTarjeta, { nombre: p.nombre, color: nombreColor(p).toLowerCase() }) : t.mensajeSoloServicio,
       ciudad: ciu ? plantilla(t.mensajeCiudad, { valor: ciu }) : ""
     });
   }
@@ -866,7 +978,7 @@
      RUTA CON PERFIL
      ============================================================ */
 
-  /* P7 ¿Eres tú? */
+  /* P7 ¿Eres tú? — una sola tarjeta grande con la foto, el nombre y lo básico */
   function fotoNegocio(n, clase) {
     const caja = el("div", { class: clase });
     const inicial = (n.displayName || "?").trim().charAt(0).toUpperCase();
@@ -883,43 +995,88 @@
     render: function (c) {
       const t = TEXTOS.eresTu;
       const n = estado.negocio;
-      c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      c.appendChild(el("div", { class: "negocio" },
-        fotoNegocio(n, "negocio__foto"),
-        el("div", { class: "negocio__datos" },
-          el("p", { class: "negocio__nombre", texto: n.displayName }),
-          el("p", { class: "negocio__direccion", texto: n.formattedAddress }),
-          lineaCalificacion(n.rating, n.userRatingCount, n.userRatingCount ? null : TEXTOS.perfil.sinResenas))));
-      c.appendChild(el("button", {
-        class: "enlace", type: "button", texto: t.otro,
-        onclick: function () { estado.negocio = null; volver(); }
-      }));
-      setCta({
-        texto: t.boton,
-        alHacerClic: function () {
-          if (limiteAlcanzado()) { ir("limite"); return; }
-          sumarAuditoria();
-          iniciarCercanos();
-          ir("perfil");
-        }
-      });
+      c.classList.add("pantalla--negocio");
+      c.appendChild(el("h1", { class: "titulo titulo--centro", texto: t.titulo }));
+      c.appendChild(el("div", { class: "centrado" }, el("span", { class: "etiqueta-chip", texto: t.etiqueta })));
+      const cuerpo = el("div", { class: "negocio-card__cuerpo" },
+        el("h2", { class: "negocio-card__nombre", texto: n.displayName }),
+        lineaCalificacion(n.rating, n.userRatingCount, n.userRatingCount ? null : TEXTOS.perfil.sinResenas));
+      if (n.primaryTypeDisplayName) cuerpo.appendChild(el("span", { class: "chip", texto: n.primaryTypeDisplayName }));
+      if (n.formattedAddress) {
+        cuerpo.appendChild(el("p", { class: "dato-linea" }, ICONO.pin("dato-linea__icono"), el("span", { texto: n.formattedAddress })));
+      }
+      const acciones = el("div", { class: "negocio-card__acciones" },
+        el("button", {
+          class: "boton", type: "button",
+          onclick: function () {
+            if (limiteAlcanzado()) { ir("limite"); return; }
+            sumarAuditoria();
+            iniciarCercanos();
+            ir("perfil");
+          }
+        }, el("span", { texto: t.boton }), ICONO.flecha("boton__flecha")),
+        el("button", {
+          class: "enlace enlace--centro", type: "button", texto: t.otro,
+          onclick: function () { estado.negocio = null; volver(); }
+        }));
+      c.appendChild(el("div", { class: "negocio-card" }, fotoNegocio(n, "foto-negocio"), cuerpo, acciones));
     }
   };
 
-  /* P8 Tu perfil */
+  /* P8 Así te ven tus clientes: ficha tipo Google Maps + los 6 puntos que mira un cliente */
+  function hostWeb(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ""); } catch (e) { return String(url); }
+  }
+  function filaDato(icono, hijo, apagada) {
+    return el("p", { class: "dato-linea" + (apagada ? " dato-linea--apagada" : "") }, icono, hijo);
+  }
   PANTALLAS.perfil = {
     render: function (c) {
       const t = TEXTOS.perfil;
       const n = estado.negocio;
+      const res = Calculos.puntajePerfil(n);
+      estado.puntajePerfil = res.puntaje;
+      c.classList.add("pantalla--perfil");
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      const foto = fotoNegocio(n, "ficha__foto");
-      foto.appendChild(el("div", { class: "ficha__buscador", texto: n.displayName }));
-      const cuerpo = el("div", { class: "ficha__cuerpo" },
-        el("h2", { class: "ficha__nombre", texto: n.displayName }),
+
+      // Ficha como la ve un cliente en Google Maps
+      const cuerpo = el("div", { class: "mapa__cuerpo" },
+        el("h2", { class: "mapa__nombre", texto: n.displayName }),
         lineaCalificacion(n.rating, n.userRatingCount, n.userRatingCount ? null : t.sinResenas));
-      const extras = [n.priceRange, n.primaryTypeDisplayName].filter(Boolean).join(" · ");
-      if (extras) cuerpo.appendChild(el("p", { class: "ficha__linea", texto: extras }));
-      c.appendChild(el("div", { class: "ficha" }, foto, cuerpo));
+      const extras = [n.primaryTypeDisplayName, n.priceRange].filter(Boolean).join(" · ");
+      if (extras) cuerpo.appendChild(el("p", { class: "mapa__linea", texto: extras }));
+      const filas = el("div", { class: "mapa__filas" });
+      // Horario: abierto ahora / cerrado
+      if (n.tieneHorario && n.abierto !== null && n.abierto !== undefined) {
+        filas.appendChild(filaDato(ICONO.reloj("dato-linea__icono"),
+          el("span", { class: n.abierto ? "estado-abierto" : "estado-cerrado", texto: n.abierto ? t.abierto : t.cerrado })));
+      } else if (!n.tieneHorario) {
+        filas.appendChild(filaDato(ICONO.reloj("dato-linea__icono"), el("span", { texto: t.sinHorario }), true));
+      }
+      if (n.formattedAddress) filas.appendChild(filaDato(ICONO.pin("dato-linea__icono"), el("span", { texto: n.formattedAddress })));
+      filas.appendChild(n.telefono
+        ? filaDato(ICONO.telefono("dato-linea__icono"), el("span", { texto: n.telefono }))
+        : filaDato(ICONO.telefono("dato-linea__icono"), el("span", { texto: t.sinTelefono }), true));
+      filas.appendChild(n.sitioWeb
+        ? filaDato(ICONO.web("dato-linea__icono"), el("span", { texto: hostWeb(n.sitioWeb) }))
+        : filaDato(ICONO.web("dato-linea__icono"), el("span", { texto: t.sinWeb }), true));
+      cuerpo.appendChild(filas);
+      c.appendChild(el("div", { class: "mapa" }, fotoNegocio(n, "foto-negocio"), cuerpo));
+
+      // Puntaje y lista de 6 puntos
+      c.appendChild(el("p", { class: "puntaje" }, fragmento(t.puntaje, { x: { cuenta: res.puntaje } })));
+      c.appendChild(el("h2", { class: "lista-titulo", texto: t.listaTitulo }));
+      const lista = el("ul", { class: "chequeo" });
+      res.puntos.forEach(function (pt, i) {
+        const textos = t.puntos.filter(function (x) { return x.id === pt.id; })[0];
+        const estadoCaja = pt.estado === "ok"
+          ? el("span", { class: "chequeo__ok", role: "img", "aria-label": "Bien" }, ICONO.check())
+          : el("span", { class: "chequeo__etq", texto: pt.estado === "falta" ? t.falta : t.mejorable });
+        const li = el("li", { class: "chequeo__item chequeo__item--" + pt.estado }, el("span", { class: "chequeo__texto", texto: textos.texto }), estadoCaja);
+        li.style.setProperty("--n", String(i));
+        lista.appendChild(li);
+      });
+      c.appendChild(lista);
       setCta({
         texto: t.boton,
         alHacerClic: async function () {
@@ -1110,115 +1267,181 @@
       else resumen.textContent = t.fuera;
       c.appendChild(resumen);
       c.appendChild(el("p", { class: "pequeno", texto: t.nota }));
-      setCta({ texto: t.boton, alHacerClic: function () { ir("porque"); } });
+      setCta({ texto: t.boton, alHacerClic: function () { ir(rank.rival ? "porque" : "ritmo"); } });
     }
   };
 
-  /* P12 Por qué */
+  /* P12 La regla de Google: dos tarjetas, una cifra grande y tres pasos */
+  function tarjetaRitmo(nombre, valor, esYo) {
+    const t = TEXTOS.porque;
+    return el("div", { class: "ritmo-card" + (esYo ? " ritmo-card--yo" : "") },
+      el("p", { class: "ritmo-card__nombre", texto: nombre }),
+      el("p", { class: "ritmo-card__valor" }, numero(valor, { pref: "~" })),
+      el("p", { class: "ritmo-card__unidad", texto: valor === 1 ? t.unidadUna : t.unidad }));
+  }
   PANTALLAS.porque = {
     render: function (c) {
       const t = TEXTOS.porque;
       const rank = estado.rank;
+      const x = rank.rival.ritmo;
+      const y = rank.ritmoYo;
       c.appendChild(el("span", { class: "etiqueta", texto: t.etiqueta }));
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      const x = rank.rival ? rank.rival.ritmo : 0;
-      const y = rank.ritmoYo;
-      const maximo = Math.max(x, y, 1);
-      const rellenos = [];
-      function barra(texto, valor, clase) {
-        const relleno = el("div", { class: "barra-relleno " + clase });
-        relleno.dataset.ancho = Math.max(4, Math.round(valor / maximo * 100)) + "%";
-        rellenos.push(relleno);
-        return el("div", { class: "barra-bloque" },
-          el("div", { class: "barra-bloque__cabecera" }, el("span", { texto: texto })),
-          el("div", { class: "barra-pista" }, relleno));
-      }
-      if (rank.rival) {
-        c.appendChild(barra(plantilla(t.barraRival, { p: rank.rival.puesto, nombre: rank.rival.nombre, x: x }), x, "barra-relleno--rival"));
-      }
-      c.appendChild(barra(plantilla(t.barraTu, { y: y }), y, "barra-relleno--yo"));
-      c.appendChild(el("p", { class: "texto texto--fuerte", texto: t.texto }));
-      pasar(function () { rellenos.forEach(function (r) { r.style.width = r.dataset.ancho; }); }, 80);
+      c.appendChild(el("div", { class: "ritmo-cards" },
+        tarjetaRitmo(plantilla(t.rival, { p: rank.rival.puesto, nombre: rank.rival.nombre }), x, false),
+        tarjetaRitmo(t.tu, y, true)));
+      // Cifra grande: cuántas veces más recibe el rival
+      const veces = y > 1 ? Math.round(x / y) : 0;
+      let grande;
+      if (y <= 1) grande = el("p", { class: "veces veces--frase", texto: plantilla(t.casiNinguna, { x: x }) });
+      else if (veces >= 2) grande = el("p", { class: "veces" }, fragmento(t.veces, { n: { cuenta: veces } }));
+      else grande = el("p", { class: "veces veces--neutra", texto: t.parejo });
+      c.appendChild(grande);
+      // Tres pasos con flechas finas
+      const pasos = el("div", { class: "tres-pasos" });
+      t.pasos.forEach(function (txt, i) {
+        if (i) pasos.appendChild(ICONO.flechaFina("tres-pasos__flecha"));
+        pasos.appendChild(el("span", { class: "tres-pasos__paso", texto: txt }));
+      });
+      c.appendChild(pasos);
+      c.appendChild(el("p", { class: "texto texto--fuerte texto--centro", texto: t.texto }));
       setCta({ texto: t.boton, alHacerClic: function () { ir("ritmo"); } });
     }
   };
 
-  /* P13 Ritmo con la tarjeta */
-  function dibujarGrafica(pr) {
+  /* P13 Estimación: tabla de posiciones con dos pestañas ("Hoy" y "En 90 días") */
+  const ALTO_FILA_TABLA = 62;
+  function tween(nodo, desde, hasta, ms) {
+    if (sinMovimiento() || desde === hasta) { nodo.textContent = miles(hasta); return; }
+    const inicio = performance.now();
+    function paso(ahora) {
+      const p = Math.min(1, (ahora - inicio) / ms);
+      nodo.textContent = miles(desde + (hasta - desde) * (1 - Math.pow(1 - p, 3)));
+      if (p < 1 && nodo.isConnected) requestAnimationFrame(paso);
+    }
+    requestAnimationFrame(paso);
+  }
+  function crearTabla(tp) {
     const t = TEXTOS.ritmo;
-    const W = 340, H = 190, izq = 12, der = 18, arriba = 22, abajo = 30;
-    const valores = [pr.n0, pr.actual90, pr.n90];
-    if (pr.rival90 !== null) valores.push(pr.rival90, estado.rank.rival.total);
-    const min = Math.min.apply(null, valores);
-    const max = Math.max.apply(null, valores);
-    const colchon = Math.max(1, (max - min) * 0.06);
-    const y0 = min - colchon, y1 = max + colchon;
-    const X = function (d) { return izq + (d / 90) * (W - izq - der); };
-    const Y = function (v) { return arriba + (1 - (v - y0) / (y1 - y0)) * (H - arriba - abajo); };
-    const linea = function (a, b, clase, extra) {
-      const largo = Math.hypot(X(90) - X(0), Y(b) - Y(a));
-      return '<line class="' + clase + '" x1="' + X(0) + '" y1="' + Y(a) + '" x2="' + X(90) + '" y2="' + Y(b) +
-        '" stroke-linecap="round" style="--largo:' + largo.toFixed(0) + '" ' + (extra || "") + '/>';
-    };
-    let html = '<line x1="' + izq + '" y1="' + (H - abajo + 6) + '" x2="' + (W - der) + '" y2="' + (H - abajo + 6) + '" stroke="#E6E6E3" stroke-width="2"/>';
-    if (pr.rival90 !== null) html += linea(estado.rank.rival.total, pr.rival90, "g-rival", 'stroke-dasharray="6 7"');
-    html += linea(pr.n0, pr.actual90, "g-actual");
-    html += linea(pr.n0, pr.n90, "g-tarjeta");
-    html += '<circle cx="' + X(90) + '" cy="' + Y(pr.n90) + '" r="6.5" fill="#15803D"/>';
-    html += '<text x="' + X(0) + '" y="' + (H - 6) + '" font-size="13" fill="#5C5C5C" font-family="Montserrat,sans-serif">' + t.hoy + '</text>';
-    html += '<text x="' + X(90) + '" y="' + (H - 6) + '" font-size="13" fill="#5C5C5C" text-anchor="end" font-family="Montserrat,sans-serif">' + t.dia90 + '</text>';
-    const s = svg(html, "grafica", "0 0 " + W + " " + H);
-    s.removeAttribute("aria-hidden");
-    s.setAttribute("role", "img");
-    s.setAttribute("aria-label", "Estimación a 90 días: de " + pr.n0 + " a " + pr.n90 + " reseñas con la tarjeta");
-    return s;
+    const mapa = {};
+    const claves = [];
+    function registrar(lista, clave) {
+      lista.forEach(function (f, i) {
+        const k = f.id || ("n-" + f.nombre);
+        if (!mapa[k]) { mapa[k] = { nombre: f.nombre, esYo: f.esYo }; claves.push(k); }
+        mapa[k][clave] = { pos: i, puesto: f.puesto, total: f.total };
+      });
+    }
+    registrar(tp.hoy, "hoy");
+    registrar(tp.d90, "d90");
+    const filasMax = Math.max(tp.hoy.length, tp.d90.length);
+    const caja = el("div", { class: "tabla", role: "list", "aria-label": t.tabla });
+    caja.style.height = (filasMax * ALTO_FILA_TABLA) + "px";
+
+    claves.forEach(function (k) {
+      const m = mapa[k];
+      m.puestoEl = el("span", { class: "tabla__puesto" });
+      m.totalEl = el("span", { class: "tabla__total" });
+      m.subesEl = m.esYo ? el("span", { class: "tabla__subes", texto: tp.entra ? plantilla(t.entras, { n: tp.total }) : (tp.sube === 1 ? t.subesUno : plantilla(t.subes, { n: tp.sube })) }) : null;
+      m.fila = el("div", { class: "tabla__fila" + (m.esYo ? " tabla__fila--yo" : ""), role: "listitem" },
+        m.puestoEl,
+        el("span", { class: "tabla__nombre" }, el("span", { class: "tabla__texto", texto: m.nombre }), m.subesEl),
+        m.totalEl);
+      m.totalActual = null;
+      caja.appendChild(m.fila);
+    });
+
+    function aplicar(clave, animar) {
+      claves.forEach(function (k) {
+        const m = mapa[k];
+        const d = m[clave] || m[clave === "hoy" ? "d90" : "hoy"];
+        m.fila.style.setProperty("--pos", String(d.pos));
+        const aqui = m[clave];
+        m.fila.classList.toggle("tabla__fila--oculta", !aqui);
+        if (!aqui) return;
+        m.puestoEl.textContent = aqui.puesto === null ? tp.total + "+" : String(aqui.puesto);
+        if (animar && m.totalActual !== null) tween(m.totalEl, m.totalActual, aqui.total, 700);
+        else m.totalEl.textContent = miles(aqui.total);
+        m.totalActual = aqui.total;
+        if (m.subesEl) m.fila.classList.toggle("tabla__fila--sube", clave === "d90");
+      });
+    }
+    aplicar("hoy", false);
+
+    const bHoy = el("button", { class: "pestana", type: "button", role: "tab", "aria-selected": "true", texto: t.pestanaHoy });
+    const b90 = el("button", { class: "pestana", type: "button", role: "tab", "aria-selected": "false", texto: t.pestana90 });
+    let auto = null;
+    function elegir(clave, desdeAuto) {
+      if (!desdeAuto) clearTimeout(auto);
+      bHoy.setAttribute("aria-selected", clave === "hoy" ? "true" : "false");
+      b90.setAttribute("aria-selected", clave === "d90" ? "true" : "false");
+      aplicar(clave, true);
+    }
+    bHoy.addEventListener("click", function () { elegir("hoy", false); });
+    b90.addEventListener("click", function () { elegir("d90", false); });
+    // Entra en "Hoy" y a los 1,5 segundos pasa sola a "En 90 días"
+    auto = pasar(function () { elegir("d90", true); }, 1500);
+
+    const cabecera = el("div", { class: "tabla__cabecera", "aria-hidden": "true" },
+      el("span", { texto: t.columnas.puesto }), el("span", { texto: t.columnas.negocio }), el("span", { texto: t.columnas.resenas }));
+    return el("div", { class: "tabla-caja" },
+      el("div", { class: "pestanas", role: "tablist" }, bHoy, b90),
+      cabecera, caja);
   }
   PANTALLAS.ritmo = {
     render: function (c) {
       const t = TEXTOS.ritmo;
       const pr = estado.proy;
       const rank = estado.rank;
+      c.classList.add("pantalla--ritmo");
       c.appendChild(el("span", { class: "etiqueta-estimacion", texto: t.estimacion }));
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      c.appendChild(el("p", { class: "texto", texto: plantilla(t.texto, { c: miles(clientesDia()), r: miles(pr.r) }) }));
-      c.appendChild(dibujarGrafica(pr));
-      const leyenda = el("div", { class: "leyenda" },
-        el("span", null, el("i", { style: "border-color:#767676" }), t.leyendaActual),
-        el("span", { class: "texto--fuerte", style: "color:#111" }, el("i", { style: "border-color:#15803D;border-top-width:5px" }), t.leyendaTarjeta));
-      if (pr.rival90 !== null) leyenda.appendChild(el("span", null, el("i", { style: "border-color:#111;border-top-style:dashed" }), t.leyendaRival));
-      c.appendChild(leyenda);
-      const vars = { n0: miles(pr.n0), n90: miles(pr.n90), e0: pr.e0 === null ? "" : decimal(pr.e0), e90: pr.e90 === null ? "" : decimal(pr.e90) };
-      c.appendChild(el("p", { class: "resumen-90", texto: plantilla(pr.e0 === null ? t.resumenSinCalificacion : t.resumen, vars) }));
-      if (pr.mejora) c.appendChild(el("p", { class: "mejora", texto: plantilla(t.mejora, { p: rank.puesto, p90: pr.p90 }) }));
+      c.appendChild(el("p", { class: "frase-grande", texto: plantilla(t.texto, { c: miles(clientesDia()), r: miles(pr.r) }) }));
+      // Si el puesto no mejora, solo van la frase y los dos datos grandes
+      if (pr.mejora) c.appendChild(crearTabla(Calculos.tablaPosiciones(estado.negocio, rank, pr)));
+      const resenas = el("div", { class: "dato-grande" },
+        el("p", { class: "dato-grande__valor" }, numero(pr.n0, {}), el("span", { class: "dato-grande__flecha", texto: " → " }), numero(pr.n90, { desde: pr.n0 })),
+        el("p", { class: "dato-grande__nombre", texto: t.resenasDato }));
+      const estrellasDato = el("div", { class: "dato-grande" },
+        el("p", { class: "dato-grande__valor" },
+          pr.e0 === null ? null : numero(pr.e0, { dec: 1 }), pr.e0 === null ? null : el("span", { class: "dato-grande__flecha", texto: " → " }),
+          numero(pr.e90 === null ? 0 : pr.e90, { dec: 1, desde: pr.e0 === null ? 0 : pr.e0 }), el("span", { class: "dato-grande__estrella", texto: " ★" })),
+        el("p", { class: "dato-grande__nombre", texto: " " }));
+      c.appendChild(el("div", { class: "datos-grandes" }, resenas, estrellasDato));
       setCta({ texto: t.boton, alHacerClic: function () { ir("tarjeta"); } });
     }
   };
 
-  /* P14 La tarjeta: foto real de la Tarjeta Toque Pro, sin personalizar */
+  /* P14 La tarjeta: foto real de la Tarjeta Toque Pro en negro, sin personalizar */
   PANTALLAS.tarjeta = {
     render: function (c) {
       const t = TEXTOS.tarjeta;
+      const pro = PRODUCTOS.filter(function (p) { return p.id === "pro"; })[0];
+      const negra = pro.colores.filter(function (x) { return x.id === "negro"; })[0] || pro.colores[0];
       c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      if (IMAGENES.tarjetaPro) {
-        const caja = el("div", { class: "tarjeta-foto" });
-        const img = el("img", { class: "foto-tarjeta", src: IMAGENES.tarjetaPro, alt: t.alt });
-        img.addEventListener("error", function () { caja.remove(); });
-        caja.appendChild(img);
-        c.appendChild(caja);
-      }
-      c.appendChild(el("p", { class: "texto", texto: t.texto }));
+      const foto = fotoProducto(pro, negra, { clase: "foto-prod--grande", sizes: "(min-width: 768px) 360px, 80vw", lazy: false });
+      foto.querySelector("img").setAttribute("alt", t.alt);
+      c.appendChild(el("div", { class: "tarjeta-foto" }, foto));
+      c.appendChild(el("p", { class: "texto texto--centro", texto: t.texto }));
       setCta({ texto: t.boton, alHacerClic: function () { ir("como"); } });
     }
   };
 
-  /* P15 Cómo funciona */
+  /* P15 Así de fácil: tres tarjetas numeradas que entran una por una */
   PANTALLAS.como = {
+    ancha: true,
     render: function (c) {
       const t = TEXTOS.como;
-      c.appendChild(el("h1", { class: "titulo", texto: t.titulo }));
-      const ol = el("ol", { class: "pasos" });
+      c.classList.add("pantalla--como");
+      c.appendChild(el("h1", { class: "titulo titulo--centro", texto: t.titulo }));
+      const ol = el("ol", { class: "pasos3" });
       t.pasos.forEach(function (p, i) {
-        ol.appendChild(el("li", { class: "paso" }, el("span", { class: "paso__num", texto: String(i + 1) }), el("p", { texto: p })));
+        const li = el("li", { class: "paso3" },
+          el("span", { class: "paso3__num", texto: String(i + 1) }),
+          el("span", { class: "paso3__emoji", "aria-hidden": "true", texto: p.emoji }),
+          el("p", { class: "paso3__texto", texto: p.texto }));
+        li.style.setProperty("--n", String(i));
+        ol.appendChild(li);
       });
       c.appendChild(ol);
       setCta({ texto: t.boton, alHacerClic: function () { ir("contacto"); } });
@@ -1313,8 +1536,9 @@
     }
   };
 
-  /* P17 Elige tu tarjeta: tres opciones con el mismo alto y la misma estructura */
+  /* P17 Elige tu tarjeta: tres cards con el mismo alto y la misma estructura */
   PANTALLAS.precios = {
+    ancha: true,
     render: function (c) {
       const t = TEXTOS.precios;
       const pr = estado.proy;
@@ -1323,51 +1547,41 @@
         const pre = PRODUCTOS.filter(function (p) { return p.preseleccionada; })[0] || PRODUCTOS[0];
         estado.opcionId = pre.id;
       }
-      c.appendChild(el("h1", { class: "titulo", texto: plantilla(t.titulo, { negocio: nombreNegocio() }) }));
-      c.appendChild(el("div", { class: "franja", texto: t.franja }));
-      const parrafoCosto = el("p", { class: "texto texto--fuerte" });
-      c.appendChild(parrafoCosto);
+      c.classList.add("pantalla--precios");
+      const parrafoCosto = el("p", { class: "texto texto--fuerte texto--centro", style: "margin:0" });
+      const cabecera = el("div", { class: "precios__cabecera" },
+        el("h1", { class: "titulo titulo--centro", texto: plantilla(t.titulo, { negocio: nombreNegocio() }) }));
+      if (navidadVigente()) cabecera.appendChild(el("div", { class: "franja franja--navidad", texto: t.navidad }));
+      cabecera.appendChild(el("div", { class: "franja", texto: t.franja }));
+      cabecera.appendChild(parrafoCosto);
+      c.appendChild(cabecera);
 
       const caja = el("div", { class: "productos", role: "group", "aria-label": "Opciones de tarjeta" });
-      const botones = {};
-
-      function foto(src, nombre, envoltura) {
-        const img = el("img", { class: "foto-producto", src: src, alt: nombre, loading: "lazy" });
-        img.addEventListener("error", function () { envoltura.replaceChildren(crearTarjetaNfc()); });
-        return img;
-      }
-      function imagenProducto(p) {
-        const envoltura = el("div", { class: "producto__imagen" });
-        if (p.id === "duo" && !IMAGENES.duo) {
-          envoltura.appendChild(IMAGENES.tarjetaPro ? foto(IMAGENES.tarjetaPro, p.nombre, envoltura) : crearTarjetaNfc());
-          envoltura.appendChild(crearTarjetaNfc());
-        } else if (IMAGENES[p.imagen]) {
-          envoltura.appendChild(foto(IMAGENES[p.imagen], p.nombre, envoltura));
-        } else {
-          envoltura.appendChild(crearTarjetaNfc());
-        }
-        return envoltura;
-      }
+      const tarjetas = {};
 
       PRODUCTOS.forEach(function (p) {
+        const color = colorDe(p);
+        const opFoto = { sizes: "(min-width: 768px) 300px, 90vw", lazy: true };
         const clientes = Calculos.clientesParaPagar(p.precio, ticket);
-        const precioFila = el("p", { class: "producto__precio", texto: "$" + miles(p.precio) });
+        const foto = fotoProducto(p, color, { clase: "tarjeta-precio__foto", sizes: opFoto.sizes, lazy: true });
+        if (p.etiqueta) foto.appendChild(el("span", { class: "cinta", texto: p.etiqueta }));
+        foto.appendChild(el("span", { class: "tarjeta-precio__check", "aria-hidden": "true" }, ICONO.check()));
+        const precioFila = el("p", { class: "tarjeta-precio__precio", texto: "$" + miles(p.precio) });
         if (p.precioAntes) precioFila.appendChild(el("s", { texto: "$" + miles(p.precioAntes) }));
-        const info = el("div", { class: "producto__info" },
-          el("p", { class: "producto__nombre", texto: p.nombre }),
+        const boton = el("button", { class: "boton boton--secundario tarjeta-precio__boton", type: "button", "aria-pressed": "false" });
+        boton.addEventListener("click", function (ev) { ev.stopPropagation(); elegirOpcion(p.id, true); });
+        const cuerpo = el("div", { class: "tarjeta-precio__cuerpo" },
+          selectorColor(p, function (col) { cambiarFoto(foto, p, col, opFoto); elegirOpcion(p.id, true); }),
+          el("h2", { class: "tarjeta-precio__nombre", texto: p.nombre }),
+          el("p", { class: "tarjeta-precio__desc", texto: p.descripcion }),
           precioFila,
-          el("p", { class: "producto__desc", texto: p.descripcion }),
-          el("p", { class: "producto__linea producto__linea--suave", texto: plantilla(t.menosPorDia, { d: miles(Calculos.precioPorDia(p.precio)) }) }));
-        if (clientes) {
-          info.appendChild(el("p", { class: "producto__linea", texto: clientes === 1 ? t.sePaga.uno : plantilla(t.sePaga.varios, { n: clientes }) }));
-        }
-        const b = el("button", { class: "producto", type: "button", "aria-pressed": "false" },
-          p.etiqueta ? el("span", { class: "producto__etiqueta", texto: p.etiqueta }) : null,
-          el("div", { class: "producto__fila" }, el("span", { class: "producto__radio" }), info),
-          imagenProducto(p));
-        b.addEventListener("click", function () { elegirOpcion(p.id, true); });
-        botones[p.id] = b;
-        caja.appendChild(b);
+          el("p", { class: "tarjeta-precio__linea tarjeta-precio__linea--suave", texto: plantilla(t.menosPorDia, { d: miles(Calculos.precioPorDia(p.precio)) }) }),
+          clientes ? el("p", { class: "tarjeta-precio__linea", texto: clientes === 1 ? t.sePaga.uno : plantilla(t.sePaga.varios, { n: clientes }) }) : null,
+          boton);
+        const tarjeta = el("div", { class: "tarjeta-precio" + (p.preseleccionada ? " tarjeta-precio--destacada" : ""), "data-producto": p.id }, foto, cuerpo);
+        tarjeta.addEventListener("click", function () { elegirOpcion(p.id, true); });
+        tarjetas[p.id] = { nodo: tarjeta, boton: boton };
+        caja.appendChild(tarjeta);
       });
       c.appendChild(caja);
 
@@ -1384,7 +1598,13 @@
       function elegirOpcion(id, guardar) {
         estado.opcionId = id;
         const p = productoElegido();
-        Object.keys(botones).forEach(function (k) { botones[k].setAttribute("aria-pressed", k === id ? "true" : "false"); });
+        Object.keys(tarjetas).forEach(function (k) {
+          const marcada = k === id;
+          tarjetas[k].nodo.classList.toggle("tarjeta-precio--elegida", marcada);
+          tarjetas[k].boton.setAttribute("aria-pressed", marcada ? "true" : "false");
+          tarjetas[k].boton.replaceChildren(marcada ? ICONO.check("boton__check") : document.createTextNode(""),
+            el("span", { texto: marcada ? t.elegida : t.elegir }));
+        });
         parrafoCosto.textContent = plantilla(t.costoPorResena, { r: miles(pr.r), costo: miles(Calculos.costoPorResena(p.precio, pr.r)) });
         setCta({ texto: plantilla(t.boton, { opcion: p.nombre }), alHacerClic: pedir });
         if (guardar) { vibrar(); guardarLead("opcion"); }
@@ -1407,12 +1627,13 @@
       negocio: nombreNegocio(),
       enlace: enlaceMapas(),
       opcion: p ? p.nombre : "",
+      color: p ? nombreColor(p).toLowerCase() : "",
       precio: p ? miles(p.precio) : "",
       ciudad: ciudad()
     });
   }
 
-  /* P18 y cierre de R4: Listo, con un check grande que se dibuja una vez */
+  /* P18 y cierre de R4: Listo, con un check grande que se dibuja una vez y unos copos de nieve extra */
   PANTALLAS.listo = {
     render: function (c) {
       const t = TEXTOS.listo;
@@ -1429,9 +1650,10 @@
         filas = [[t.servicio, srv.nombre + " · " + (precioSrv || t.precioPendiente)]];
         if (estado.sinPerfil.negocio) filas.push([t.negocio, estado.sinPerfil.negocio]);
         filas.push([t.tarjeta, p ? p.nombre + " · $" + miles(p.precio) : TEXTOS.sinPerfil.r4.soloServicio]);
+        if (p) filas.push([t.color, nombreColor(p)]);
         if (estado.sinPerfil.ciudad) filas.push([t.ciudad, estado.sinPerfil.ciudad]);
       } else {
-        filas = [[t.negocio, nombreNegocio()], [t.tarjeta, p ? p.nombre : ""], [t.precio, p ? "$" + miles(p.precio) : ""], [t.ciudad, ciudad()]];
+        filas = [[t.negocio, nombreNegocio()], [t.tarjeta, p ? p.nombre : ""], [t.color, nombreColor(p)], [t.precio, p ? "$" + miles(p.precio) : ""], [t.ciudad, ciudad()]];
       }
       const lista = el("dl");
       filas.forEach(function (par) {
@@ -1442,6 +1664,7 @@
         texto: t.boton,
         alHacerClic: function () { abrirWhatsapp(sin ? mensajeSinPerfil() : mensajePedido()); }
       });
+      if (!estado.rafagaHecha) { estado.rafagaHecha = true; Nieve.rafaga(); }
     }
   };
 
@@ -1463,6 +1686,8 @@
   PANTALLAS.limite = pantallaAviso("limite");
 
   /* ---------- Arranque ---------- */
+  if (TEMA_NAVIDAD) document.body.classList.add("navidad");
+  Nieve.iniciar();
   iniciarPixel();
   mostrar("bienvenida");
 })();
